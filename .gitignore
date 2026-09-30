@@ -1,0 +1,33 @@
+# Flutter & Dart
+atur_kos/.dart_tool/
+atur_kos/build/
+atur_kos/.flutter-plugins-dependencies
+atur_kos/.flutter-plugins
+atur_kos/.pub-cache/
+atur_kos/.pub/
+atur_kos/.idea/
+atur_kos/*.iml
+atur_kos/ios/Flutter/.last_build_id
+atur_kos/ios/Flutter/ephemeral/
+atur_kos/macos/Flutter/ephemeral/
+atur_kos/android/app/debug/
+atur_kos/android/app/profile/
+atur_kos/android/app/release/
+atur_kos/.widget_preview/
+
+# Node & Next.js
+login-supabase-app/node_modules/
+login-supabase-app/.next/
+login-supabase-app/.env*.local
+login-supabase-app/npm-debug.log*
+login-supabase-app/yarn-debug.log*
+login-supabase-app/yarn-error.log*
+
+# General / Environment
+.git_bak
+**/.git_bak
+.env
+.env*.local
+.DS_Store
+Thumbs.db
+*.log
