@@ -94,29 +94,86 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (mounted) {
         if (response.user != null) {
           final isOwner = _selectedRole == 'owner';
-          final titleMsg = isOwner ? 'Kos Baru Berhasil Didaftarkan' : 'Pendaftaran Penghuni Berhasil';
-          final descMsg = isOwner
-              ? 'Selamat! Akun pemilik untuk ${_namaKostController.text.trim()} telah dibuat. Silakan masuk untuk mulai mengelola kamar dan tagihan kos Anda.'
-              : 'Akun penghuni atas nama $nama telah terhubung ke kos pilihan Anda (Default: Kos Princess).\n\nStatus saat ini: "Menunggu Alokasi Kamar oleh Pemilik".';
+          final roleName = isOwner ? 'Pemilik Kos' : 'Penghuni Kos';
+          final requiresConfirmation = response.session == null;
 
           showDialog(
             context: context,
             barrierDismissible: false,
             builder: (context) => AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               title: Row(
                 children: [
-                  const Icon(Icons.check_circle_rounded, color: Colors.green, size: 28),
+                  Icon(
+                    requiresConfirmation
+                        ? Icons.mark_email_read_rounded
+                        : Icons.check_circle_rounded,
+                    color: requiresConfirmation
+                        ? const Color(0xFF1E40AF)
+                        : const Color(0xFF059669),
+                    size: 28,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      titleMsg,
-                      style: const TextStyle(fontSize: 18),
+                      requiresConfirmation
+                          ? 'Konfirmasi Email Anda'
+                          : (isOwner ? 'Kos Berhasil Didaftarkan' : 'Pendaftaran Berhasil'),
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
               ),
-              content: Text(descMsg, style: const TextStyle(height: 1.5)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Pendaftaran akun $roleName atas nama $nama berhasil!',
+                    style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
+                  ),
+                  const SizedBox(height: 12),
+                  if (requiresConfirmation) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFBFDBFE)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.info_outline_rounded,
+                              color: Color(0xFF1E40AF), size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Email konfirmasi telah dikirim ke:\n$email',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF1E3A8A),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Silakan buka kotak masuk (inbox atau spam) email Anda dan klik tautan konfirmasi untuk membuktikan bahwa email tersebut adalah milik Anda sebelum masuk.',
+                      style: TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.4),
+                    ),
+                  ] else ...[
+                    Text(
+                      isOwner
+                          ? 'Selamat! Akun pemilik untuk ${_namaKostController.text.trim()} telah dibuat. Silakan masuk untuk mulai mengelola kamar dan tagihan kos Anda.'
+                          : 'Akun penghuni atas nama $nama telah terhubung ke kos pilihan Anda (Default: Kos Princess).\n\nStatus saat ini: "Menunggu Alokasi Kamar oleh Pemilik".',
+                      style: const TextStyle(height: 1.4, color: Color(0xFF475569)),
+                    ),
+                  ],
+                ],
+              ),
               actions: [
                 ElevatedButton(
                   onPressed: () {
@@ -128,6 +185,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                     );
                   },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1E40AF),
+                    foregroundColor: Colors.white,
+                  ),
                   child: const Text('Ke Halaman Masuk'),
                 ),
               ],
@@ -236,11 +297,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                   color: isTenant ? theme.colorScheme.primary : const Color(0xFF64748B),
                                 ),
                                 const SizedBox(width: 8),
-                                Text(
-                                  'Penghuni Kos',
-                                  style: TextStyle(
-                                    fontWeight: isTenant ? FontWeight.bold : FontWeight.w500,
-                                    color: isTenant ? theme.colorScheme.primary : const Color(0xFF64748B),
+                                Flexible(
+                                  child: Text(
+                                    'Penghuni Kos',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontWeight: isTenant ? FontWeight.bold : FontWeight.w500,
+                                      color: isTenant ? theme.colorScheme.primary : const Color(0xFF64748B),
+                                    ),
                                   ),
                                 ),
                               ],
@@ -275,11 +340,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                   color: !isTenant ? theme.colorScheme.primary : const Color(0xFF64748B),
                                 ),
                                 const SizedBox(width: 8),
-                                Text(
-                                  'Daftarkan Kos Baru',
-                                  style: TextStyle(
-                                    fontWeight: !isTenant ? FontWeight.bold : FontWeight.w500,
-                                    color: !isTenant ? theme.colorScheme.primary : const Color(0xFF64748B),
+                                Flexible(
+                                  child: Text(
+                                    'Daftarkan Kos Baru',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontWeight: !isTenant ? FontWeight.bold : FontWeight.w500,
+                                      color: !isTenant ? theme.colorScheme.primary : const Color(0xFF64748B),
+                                    ),
                                   ),
                                 ),
                               ],
@@ -308,14 +377,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           children: [
                             const Icon(Icons.link_rounded, color: Color(0xFF1E40AF), size: 20),
                             const SizedBox(width: 8),
-                            Text(
-                              'Kode Undangan Kos',
-                              style: theme.textTheme.labelLarge?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: const Color(0xFF1E40AF),
+                            Expanded(
+                              child: Text(
+                                'Kode Undangan Kos',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelLarge?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: const Color(0xFF1E40AF),
+                                ),
                               ),
                             ),
-                            const Spacer(),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                               decoration: BoxDecoration(
@@ -414,7 +486,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   controller: _namaController,
                   textCapitalization: TextCapitalization.words,
                   decoration: _buildInputDecoration(
-                    hint: isTenant ? 'Contoh: Dimas Aditya' : 'Contoh: Ibu Rina',
+                    hint: isTenant ? 'Contoh: Dimas Aditya' : 'Contoh: Budi Santoso',
                     icon: Icons.person_outline_rounded,
                   ),
                   validator: (value) {

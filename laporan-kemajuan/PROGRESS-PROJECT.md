@@ -10,58 +10,59 @@
 
 | Modul | Status | Persentase | Terakhir Diperbarui |
 | :--- | :---: | :---: | :---: |
-| **Fondasi & Basis Data (Supabase)** | In Progress | 40% | 22 September 2026 |
-| **Modul 1: Autentikasi & RBAC** | In Progress | 60% | 22 September 2026 |
-| **Modul 2: Manajemen Kamar & Penghuni** | Belum Mulai | 0% | - |
-| **Modul 3: Smart Billing & WhatsApp Reminder** | Belum Mulai | 0% | - |
-| **Modul 4: Helpdesk Kerusakan Fasilitas** | Belum Mulai | 0% | - |
-| **Modul 5: Mitigasi Kamar Kosong & Poster AI**| Belum Mulai | 0% | - |
-| **Pengujian Sistem (Testing & UAT)** | Belum Mulai | 0% | - |
+| **Fondasi & Basis Data (Supabase & RLS)** | Selesai | 100% | 6 Oktober 2026 |
+| **Modul 1: Autentikasi & RBAC** | Selesai | 100% | 6 Oktober 2026 |
+| **Modul 2: Inventaris & Alokasi Kamar** | Selesai | 100% | 6 Oktober 2026 |
+| **Modul 3: Finansial & Tagihan Sewa** | In Progress | 50% | 6 Oktober 2026 |
+| **Modul 4: Tiket Keluhan & Perbaikan** | Belum Mulai | 0% | - |
+| **Modul 5: Mitigasi Kamar Kosong & Poster AI** | In Progress | 40% | 6 Oktober 2026 |
+| **Pengujian Sistem (Testing & UAT)** | In Progress | 40% | 6 Oktober 2026 |
 
 ---
 
 ## 🛠️ Rincian Status per Modul
 
-### 0. Fondasi & Basis Data (Supabase)
-- [x] Inisialisasi Proyek Next.js & konfigurasi Tailwind CSS
-- [x] Konfigurasi Supabase Client & SSR helper
-- [ ] DDL Skrip SQL Pembuatan Tabel:
-  - [ ] Tabel `profiles` (Sinkronisasi `auth.users` dengan role `owner` & `tenant`)
-  - [ ] Tabel `rooms` (Nomor kamar, tipe, harga, fasilitas, status)
-  - [ ] Tabel `tenants` (Relasi user dengan kamar, tanggal sewa, siklus bayar)
-  - [ ] Tabel `invoices` (Nomor invoice, periode, nominal, bukti bayar, status)
-  - [ ] Tabel `complaints` (Kategori kamar pribadi/umum, deskripsi, foto, status)
-- [ ] Konfigurasi Row Level Security (RLS) di Supabase
-- [ ] Konfigurasi Supabase Storage Bucket (`room-photos`, `payment-proofs`, `complaint-photos`)
+### 0. Fondasi & Basis Data (Supabase & RLS)
+- [x] Inisialisasi Proyek Flutter (`atur_kos`) & konfigurasi Supabase SDK
+- [x] DDL Skrip SQL Pembuatan Tabel:
+  - [x] Tabel `profiles` (Sinkronisasi `auth.users` dengan role `owner` & `tenant`)
+  - [x] Tabel `rooms` (Nomor kamar, tipe, harga, fasilitas, status)
+  - [x] Tabel `tenants` (Relasi user dengan kamar, tanggal sewa, siklus bayar)
+  - [x] Tabel `invoices` (Nomor invoice, periode, nominal, bukti bayar, status)
+  - [x] Tabel `complaints` (Kategori kamar pribadi/umum, deskripsi, foto, status)
+- [x] Arsitektur Keamanan Ketat Row Level Security (RLS) (`supabase_secure_rbac_policies.sql`)
+- [x] Skrip Sinkronisasi Nama Calon Penghuni (`supabase_sync_candidate_names.sql`)
 
-### 1. Modul 1: Autentikasi, Profil & RBAC
-- [x] Halaman Registrasi & Login Email/Password (`/login`)
+### 1. Modul 1: Autentikasi, Profil & RBAC (100% Selesai)
+- [x] Halaman Registrasi & Login Email/Password (`login_screen.dart`, `register_screen.dart`)
 - [x] Integrasi Login dengan Google OAuth
-- [x] Halaman Sambutan Dasar (`/welcome`)
-- [ ] Middleware proteksi rute berdasarkan Role (`owner` vs `tenant`)
-- [ ] Profil Pengguna & Kelola Nomor WhatsApp
+- [x] Fitur Lupa Kata Sandi / Reset Password (`forgot_password_screen.dart`, `reset_password_screen.dart`)
+- [x] Konfirmasi Email Registrasi & Penanganan Email Confirmation
+- [x] Kepatuhan RBAC Murni: Penghapusan toggle role manual & pembersihan data dummy
+- [x] Personalisasi UI dinamis ("Halo, [Nama Pengguna]") di Dasbor Pemilik & Penghuni
+- [x] Perbaikan error layout web (`RenderFlex overflowed`) & backend HTTP 500
 
-### 2. Modul 2: Manajemen Kamar & Penghuni
-- [ ] Dasbor Pemilik (Owner Overview)
-- [ ] Halaman Daftar & Status Kamar (Kosong, Terisi, Akan Kosong, Perbaikan)
-- [ ] Form Tambah & Edit Kamar + Unggah Foto Kamar
-- [ ] Alur Alokasi Kamar (Menghubungkan akun penghuni ke kamar)
-- [ ] Alur Check-Out Penghuni (Pengembalian status kamar ke kosong)
+### 2. Modul 2: Inventaris & Alokasi Kamar (100% Selesai)
+- [x] Dasbor Pemilik (Owner Overview)
+- [x] Kode Undangan Properti Kos Dinamis (Salin clipboard & bagikan ke WhatsApp)
+- [x] Alur Masuk Calon Penghuni via Kode Undangan (`joinKosByInvitationCode`)
+- [x] Layar Alokasi Kamar Pemilik (`tenant_allocation_screen.dart`): Calon penghuni menunggu alokasi
+- [x] Pemilihan kamar kosong, penentuan harga sewa kesepakatan, dan siklus jatuh tempo
+- [x] Otomasi penerbitan tagihan pertama saat kamar berhasil dialokasikan
 
-### 3. Modul 3: Keuangan, Smart Billing & WhatsApp Reminder
-- [ ] Generator Tagihan Bulanan (Otomatis sesuai siklus jatuh tempo)
-- [ ] Dasbor Tagihan Penghuni (Rincian sewa & rekening pemilik)
-- [ ] Fitur Unggah Bukti Pembayaran (Format gambar, simpan ke Supabase Storage)
-- [ ] Halaman Verifikasi Pembayaran oleh Pemilik (1-klik konfirmasi/tolak)
-- [ ] Otomasi Pengingat WhatsApp (Integrasi Gateway / Cron Job H-3, Hari H, H+2)
+### 3. Modul 3: Finansial & Tagihan Sewa (50% Berjalan)
+- [x] Penerbitan Tagihan Otomatis Perdana saat alokasi kamar tersimpan
+- [x] Logika operasional kas & KPI keuangan di `kos_service.dart`
+- [ ] Formulir Unggah Bukti Transfer Pembayaran di sisi Penghuni (US-3.2)
+- [ ] Menu Verifikasi Pembayaran Masuk (Terima / Tolak) oleh Pemilik (US-3.3)
+- [ ] Otomasi Pengingat Jatuh Tempo WhatsApp (US-3.4)
 
-### 4. Modul 4: Helpdesk & Tiket Keluhan Kerusakan Fasilitas
+### 4. Modul 4: Helpdesk & Tiket Keluhan Fasilitas (Menunggu)
 - [ ] Form Pengajuan Komplain oleh Penghuni (Kamar Pribadi / Fasilitas Umum + Foto)
 - [ ] Dasbor Pelacakan Status Keluhan Penghuni (`Diajukan` $\rightarrow$ `Sedang Dikerjakan` $\rightarrow$ `Selesai`)
 - [ ] Dasbor Manajemen Komplain untuk Pemilik (Update status & catatan perbaikan)
-- [ ] Tampilan Keluhan Fasilitas Umum (Dapat dilihat semua penghuni)
 
-### 5. Modul 5: Mitigasi Kamar Kosong H-30 & Poster AI
+### 5. Modul 5: Mitigasi Kamar Kosong H-30 & Poster AI (40% Berjalan)
+- [x] Generator Poster Promosi Kamar Kosong (`room_poster_generator_screen.dart`)
 - [ ] Formulir Komitmen Perpanjangan Sewa H-30 di akun penghuni
-- [ ] Notifikasi otomatis kamar yang akan kosong ke dasbor pemilik
-- [ ] Generator Poster Promosi Kamar Kosong (Canvas / Template siap sebar)
+- [ ] Papan Pengumuman Digital Kos & Ekspor Laporan Keuangan (US-5.1 & US-5.5)

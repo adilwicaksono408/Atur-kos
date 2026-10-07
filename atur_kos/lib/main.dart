@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:atur_kos/screens/splash/splash_screen.dart';
 import 'package:atur_kos/screens/auth/welcome_screen.dart';
+import 'package:atur_kos/screens/auth/reset_password_screen.dart';
 import 'package:atur_kos/models/user_profile.dart';
 import 'package:atur_kos/services/auth_service.dart';
 import 'package:atur_kos/screens/dashboard/owner_dashboard_screen.dart';
@@ -16,10 +17,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Inisialisasi Supabase
-  await Supabase.initialize(
-    url: supabaseUrl,
-    publishableKey: supabaseAnonKey,
-  );
+  await Supabase.initialize(url: supabaseUrl, publishableKey: supabaseAnonKey);
 
   runApp(const AturKosApp());
 }
@@ -60,15 +58,19 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
-  // Role override lokal untuk memudahkan demonstrasi/pengujian kedua peran langsung di aplikasi
-  UserRole? _previewRole;
-
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<AuthState>(
       stream: supabase.auth.onAuthStateChange,
       builder: (context, snapshot) {
-        final session = snapshot.hasData ? snapshot.data!.session : supabase.auth.currentSession;
+        final authState = snapshot.data;
+
+        // Tangani jika pengguna membuka tautan pemulihan kata sandi dari email
+        if (authState?.event == AuthChangeEvent.passwordRecovery) {
+          return const ResetPasswordScreen();
+        }
+
+        final session = authState?.session ?? supabase.auth.currentSession;
         if (session == null) {
           return const WelcomeScreen();
         }
@@ -84,9 +86,7 @@ class _AuthGateState extends State<AuthGate> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      CircularProgressIndicator(
-                        color: Color(0xFF1E40AF),
-                      ),
+                      CircularProgressIndicator(color: Color(0xFF1E40AF)),
                       SizedBox(height: 16),
                       Text(
                         'Memuat data profil & hak akses...',
@@ -101,7 +101,8 @@ class _AuthGateState extends State<AuthGate> {
               );
             }
 
-            final userProfile = profileSnapshot.data ??
+            final userProfile =
+                profileSnapshot.data ??
                 UserProfile(
                   id: session.user.id,
                   fullName: session.user.email ?? 'Pengguna',
@@ -109,26 +110,14 @@ class _AuthGateState extends State<AuthGate> {
                   role: UserRole.tenant,
                 );
 
-            // Gunakan previewRole jika di-toggle saat testing, atau role asli dari profil
-            final effectiveRole = _previewRole ?? userProfile.role;
-
-            if (effectiveRole == UserRole.owner) {
+            // Pengalihan rute 100% murni sesuai hak akses RBAC (Modul 1 PRD)
+            if (userProfile.role == UserRole.owner) {
               return OwnerDashboardScreen(
                 profile: userProfile,
-                onSwitchRole: () {
-                  setState(() {
-                    _previewRole = UserRole.tenant;
-                  });
-                },
               );
             } else {
               return TenantDashboardScreen(
                 profile: userProfile,
-                onSwitchRole: () {
-                  setState(() {
-                    _previewRole = UserRole.owner;
-                  });
-                },
               );
             }
           },

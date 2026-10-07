@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:atur_kos/screens/auth/register_screen.dart';
+import 'package:atur_kos/screens/auth/forgot_password_screen.dart';
 import 'package:atur_kos/widgets/google_sign_in_button.dart';
 
 /// Halaman Masuk Akun (Login Screen)
@@ -48,6 +49,12 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } on AuthException catch (e) {
       if (mounted) {
+        final email = _emailController.text.trim();
+        if (e.message.toLowerCase().contains('email not confirmed')) {
+          _showEmailNotConfirmedDialog(email);
+          return;
+        }
+
         String pesan = e.message;
         if (e.message.contains('Invalid login credentials')) {
           pesan = 'Email atau kata sandi tidak cocok. Silakan periksa kembali.';
@@ -75,6 +82,84 @@ class _LoginScreenState extends State<LoginScreen> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  void _showEmailNotConfirmedDialog(String email) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.mail_outline_rounded, color: Color(0xFFD97706), size: 26),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Email Belum Dikonfirmasi',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Akun dengan email $email belum mengonfirmasi tautan verifikasi.',
+              style: const TextStyle(fontSize: 13, height: 1.4, color: Color(0xFF334155)),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Silakan periksa kotak masuk (inbox atau spam) email Anda dan klik tautan konfirmasi untuk mengaktifkan akun.',
+              style: TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.4),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Tutup'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await Supabase.instance.client.auth.resend(
+                  type: OtpType.signup,
+                  email: email,
+                );
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Email konfirmasi berhasil dikirim ulang ke $email!'),
+                      backgroundColor: const Color(0xFF059669),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              } catch (err) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Gagal mengirim ulang: $err'),
+                      backgroundColor: Colors.red.shade700,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              }
+            },
+            icon: const Icon(Icons.send_rounded, size: 16),
+            label: const Text('Kirim Ulang Email'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1E40AF),
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -198,7 +283,36 @@ class _LoginScreenState extends State<LoginScreen> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 8),
+
+                // Tombol Lupa Kata Sandi
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ForgotPasswordScreen(),
+                        ),
+                      );
+                    },
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(50, 30),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: Text(
+                      'Lupa Kata Sandi?',
+                      style: TextStyle(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
 
                 // Tombol Masuk
                 ElevatedButton(

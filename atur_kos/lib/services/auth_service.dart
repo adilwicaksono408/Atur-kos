@@ -97,11 +97,32 @@ class AuthService {
           .maybeSingle();
 
       if (response != null) {
-        return UserProfile.fromMap(
+        final profile = UserProfile.fromMap(
           response,
           fallbackEmail: user.email,
           metadata: user.userMetadata,
         );
+
+        // Jika data full_name di tabel profiles belum ada atau placeholder,
+        // sinkronkan nama dari metadata auth / Google ke database.
+        final currentDbName = response['full_name']?.toString().trim();
+        if ((currentDbName == null ||
+                currentDbName.isEmpty ||
+                currentDbName.toLowerCase() == 'calon penghuni') &&
+            profile.fullName.isNotEmpty &&
+            profile.fullName.toLowerCase() != 'calon penghuni' &&
+            profile.fullName != user.email) {
+          _client
+              .from('profiles')
+              .update({
+                'full_name': profile.fullName,
+                'updated_at': DateTime.now().toIso8601String(),
+              })
+              .eq('id', user.id)
+              .catchError((_) => null);
+        }
+
+        return profile;
       }
 
       // Jika baris profiles belum ada (misal trigger DB belum jalan),
