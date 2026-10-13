@@ -7,6 +7,7 @@ import 'package:atur_kos/models/user_profile.dart';
 import 'package:atur_kos/services/auth_service.dart';
 import 'package:atur_kos/screens/dashboard/owner_dashboard_screen.dart';
 import 'package:atur_kos/screens/dashboard/tenant_dashboard_screen.dart';
+import 'package:atur_kos/screens/admin/super_admin_dashboard_screen.dart';
 
 // Konfigurasi Supabase Proyek Atur Kos
 const String supabaseUrl = 'https://saaavfsgmrghncokwiwy.supabase.co';
@@ -110,8 +111,12 @@ class _AuthGateState extends State<AuthGate> {
                   role: UserRole.tenant,
                 );
 
-            // Pengalihan rute 100% murni sesuai hak akses RBAC (Modul 1 PRD)
-            if (userProfile.role == UserRole.owner) {
+            // Pengalihan rute 100% murni sesuai hak akses RBAC (Modul 1 PRD v2.0.0)
+            if (userProfile.role == UserRole.superAdmin) {
+              return SuperAdminDashboardScreen(
+                profile: userProfile,
+              );
+            } else if (userProfile.role == UserRole.owner) {
               return OwnerDashboardScreen(
                 profile: userProfile,
               );

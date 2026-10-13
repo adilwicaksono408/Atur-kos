@@ -118,7 +118,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     child: Text(
                       requiresConfirmation
                           ? 'Konfirmasi Email Anda'
-                          : (isOwner ? 'Kos Berhasil Didaftarkan' : 'Pendaftaran Berhasil'),
+                          : (isOwner ? 'Kos Baru: Wajib Verifikasi' : 'Pendaftaran Berhasil'),
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                   ),
@@ -160,14 +160,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    const Text(
-                      'Silakan buka kotak masuk (inbox atau spam) email Anda dan klik tautan konfirmasi untuk membuktikan bahwa email tersebut adalah milik Anda sebelum masuk.',
-                      style: TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.4),
+                    Text(
+                      isOwner
+                          ? 'Silakan konfirmasi email Anda terlebih dahulu, lalu masuk ke aplikasi untuk langsung mengajukan dokumen verifikasi kos ke Super Admin.'
+                          : 'Silakan buka kotak masuk (inbox atau spam) email Anda dan klik tautan konfirmasi untuk membuktikan bahwa email tersebut adalah milik Anda sebelum masuk.',
+                      style: const TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.4),
                     ),
                   ] else ...[
                     Text(
                       isOwner
-                          ? 'Selamat! Akun pemilik untuk ${_namaKostController.text.trim()} telah dibuat. Silakan masuk untuk mulai mengelola kamar dan tagihan kos Anda.'
+                          ? 'Selamat! Akun pemilik untuk kos "${_namaKostController.text.trim()}" telah dibuat.\n\nLangkah Wajib Selanjutnya:\nSilakan masuk ke aplikasi dan langsung lengkapi foto KTP serta foto bangunan kos untuk pengajuan verifikasi ke Super Admin.'
                           : 'Akun penghuni atas nama $nama telah terhubung ke kos pilihan Anda (Default: Kos Princess).\n\nStatus saat ini: "Menunggu Alokasi Kamar oleh Pemilik".',
                       style: const TextStyle(height: 1.4, color: Color(0xFF475569)),
                     ),
@@ -189,7 +191,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     backgroundColor: const Color(0xFF1E40AF),
                     foregroundColor: Colors.white,
                   ),
-                  child: const Text('Ke Halaman Masuk'),
+                  child: Text(isOwner ? 'Masuk & Ajukan Verifikasi' : 'Ke Halaman Masuk'),
                 ),
               ],
             ),

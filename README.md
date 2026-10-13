@@ -1,113 +1,130 @@
-# 🏠 Atur Kos — Sistem Manajemen & Otomasi Kos Princess
+# 🏠 Atur Kos — SaaS Manajemen & Otomasi Kos Multi-Tenant
 
-Platform manajemen hunian sewa (kost) modern yang dibangun dengan **Flutter** dan **Supabase (PostgreSQL, Auth, Storage)**. Dirancang untuk mengeliminasi friksi penagihan, menjamin transparansi keluhan fasilitas, dan meminimalkan tingkat kekosongan kamar (*vacancy lag*) melalui sistem terintegrasi.
+Platform manajemen hunian sewa (kost) modern yang dibangun dengan **Flutter** dan **Supabase (PostgreSQL, Auth, Storage)**. Mengadopsi arsitektur **SaaS Multi-Tenant** dengan model freemium 2-tier (*Starter* vs *Juragan*) dan portal verifikasi **Super Admin**.
 
 ---
 
 ## 📊 1. Ringkasan Status Proyek Saat Ini
 
-* **Modul 1 (Autentikasi & RBAC):** ✅ **SELESAI (100%)**
-* **Modul 2 (Manajemen Kamar & Alokasi Penghuni):** ✅ **SELESAI (100%)**
-* **Modul 3 (Finansial, Tagihan & Pembayaran):** 🔄 **BERJALAN (50%)** — Tahap 1 Selesai: Penerbitan Tagihan Otomatis
-* **Modul 4 (Tiket Keluhan & Perbaikan):** ⏳ **MENUNGGU (0%)**
-* **Modul 5 (Dashboard, Mitigasi H-30 & Poster AI):** 🔄 **BERJALAN (40%)**
+* **PRD v2.0.0 & Database Migration v2:** ✅ **SELESAI & DIADOPSI (100%)**
+* **Modul 1 (Autentikasi & RBAC 3 Peran: Super Admin, Pemilik, Penghuni):** ✅ **SELESAI (100%)**
+* **Modul 2 (Onboarding Properti Kos, Geolocation & Dokumen Keabsahan):** ✅ **SELESAI (100%)**
+* **Modul 2 (Inventaris Kamar & Alokasi Penghuni):** ✅ **SELESAI (100%)**
+* **Modul 3 (Enforcement Kuota Freemium 2-Tier: Starter 5 Kamar vs Juragan 25 Kamar):** ✅ **SELESAI (100%)**
+* **Modul 4 (Finansial, Tagihan & Smart Billing):** 🔄 **BERJALAN (50%)** — Tahap 1 Selesai: Penerbitan Tagihan Otomatis
+* **Modul 5 (Tiket Keluhan Fasilitas):** ⏳ **MENUNGGU (0%)**
+* **Modul 6 (Dashboard, Mitigasi H-30 & Poster AI):** 🔄 **BERJALAN (40%)**
 * **Kondisi Kode Flutter:** 🛡️ **Stabil & Bersih** (`flutter analyze`: 0 errors, 0 warnings).
 
 ---
 
 ## 🚀 2. Rincian Pekerjaan yang Telah Diselesaikan (Completed Work)
 
-### A. Pembenahan Autentikasi & Akun Pengguna (PRD Modul 1)
-* **Fitur Lupa Kata Sandi (*Forgot Password*):**
-  * Dibuat alur kirim email reset sandi di `forgot_password_screen.dart` dan penanganan token tautan reset di `reset_password_screen.dart`.
-* **Konfirmasi Email Registrasi:**
-  * Penanganan registrasi baru di `register_screen.dart` disesuaikan agar menampilkan instruksi verifikasi email saat fitur *Email Confirmation* Supabase aktif.
-* **Pembersihan Mode Pengguna & Personalisasi UI:**
-  * Menghapus tombol toggle manual *"Beralih Mode Pemilik / Penghuni"* demi kepatuhan RBAC (*Role-Based Access Control*) murni.
-  * Menghilangkan data dummy *"BU RINA BU RINA"*.
-  * Menambahkan ucapan pembuka personal nama pengguna secara dinamis (*"Halo, [Nama Pengguna]"*) di dasbor Pemilik dan Penghuni.
-* **Perbaikan Error Layout & Backend:**
-  * Memperbaiki bug `RenderFlex overflowed` (104px, 195px, 128px) pada antarmuka autentikasi web.
-  * Mengatasi HTTP 500 (*Database error saving new user*) saat pendaftaran.
+### A. Fondasi RBAC 3 Peran & Portal Super Admin (PRD v2 Modul 1 & 2)
+* **Perluasan Enum Role & Model Properti:**
+  * Penambahan peran `superAdmin` pada enum `UserRole` di [`user_profile.dart`](atur_kos/lib/models/user_profile.dart).
+  * Pembuatan [`kost_model.dart`](atur_kos/lib/models/kost_model.dart) mencakup koordinat geolokasi (`latitude`, `longitude`, `google_maps_url`), dokumen fisik (`dokumen_ktp_url`, `foto_bangunan_url`), status verifikasi (`KostStatus`), dan tier langganan (`SubscriptionTier`).
+* **Routing Terpusat di `main.dart`:**
+  * Rute otomatis mengarahkan ke `SuperAdminDashboardScreen` untuk super admin, `OwnerDashboardScreen` untuk pemilik, dan `TenantDashboardScreen` untuk penghuni.
+* **Portal Super Admin ([`super_admin_dashboard_screen.dart`](atur_kos/lib/screens/admin/super_admin_dashboard_screen.dart)):**
+  * Pencarian properti, filter tab status (`Semua`, `Menunggu Verifikasi`, `Aktif`, `Ditolak`, `Dibekukan`).
+  * Pratinjau foto KTP pemilik & foto tampak depan bangunan kos, koordinat maps, serta tombol aksi **Setujui (Approve)**, **Tolak (Reject)** dengan catatan, dan **Bekukan (Suspend)**.
 
-### B. Kode Undangan & Alokasi Kamar (PRD Modul 2 - US-2.2)
-* **Kode Undangan Properti Kos Dinamis:**
-  * Pemilik memiliki kode undangan kos nyata (misal `PRINCESS`, atau kombinasi nama kos + angka unik).
-  * Tersedia fitur salin ke clipboard dan bagikan ke WhatsApp calon penghuni.
-* **Alur Calon Penghuni Masuk ke Kos:**
-  * Penghuni memasukkan kode undangan di dasbor penghuni (`joinKosByInvitationCode`), akun langsung terhubung ke properti kos terkait (`profiles.kost_id`).
-* **Layar Alokasi Kamar Pemilik (`tenant_allocation_screen.dart`):**
-  * Menampilkan bagian teratas: *"Calon Penghuni Menunggu Alokasi"*.
-  * Pemilik dapat memilih calon penghuni, memilih kamar kosong, menentukan harga sewa yang disepakati, dan siklus tanggal jatuh tempo.
-* **Otomasi Tagihan Pertama:**
-  * Saat alokasi disimpan, status kamar otomatis berubah jadi terisi, data sewa aktif tercatat di tabel `tenants`, dan tagihan sewa perdana otomatis terbit di tabel `invoices`.
+### B. Onboarding Properti Kos, Lokasi & Dokumen Keabsahan (PRD v2 Modul 2)
+* **Penyederhanaan Lokasi Google Maps & GPS:**
+  * Kolom utama yang ramah: **Tautan / Link Google Maps Kos** dengan tombol langsung buka pin di peta.
+  * Tombol deteksi koordinat GPS 1-klik dengan proteksi *timeout* (3 detik pemeriksaan layanan, 6 detik pencarian posisi) agar tidak macet di web browser.
+  * Otomatisasi ekstraksi koordinat Lat/Lng via Regex saat tautan Google Maps disimpan.
+* **Upload Foto KTP & Bangunan Visual:**
+  * Kartu upload visual interaktif dengan pilihan **"Ambil dari Kamera"** dan **"Buka Galeri"** menggunakan `image_picker`.
+  * Thumbnail pratinjau instan di layar, indikator status kelengkapan dokumen, kompresi otomatis, dan penyimpanan Supabase Storage dengan fallback Base64 aman.
+* **Alur Pengajuan Verifikasi Wajib Kos Baru:**
+  * Modal dialog onboarding penyambutan pemilik baru dengan checklist dokumen (Maps, Foto Bangunan, KTP) dan tombol CTA **"Lengkapi & Ajukan Sekarang"**.
+  * Banner peringatan interaktif di dasbor pemilik dengan status real-time (`pending_verification` / `rejected` / `active`).
+* **Pre-fill Data Registrasi & Pencegahan Duplikasi Kode Undangan:**
+  * Data Informasi Umum & Alamat Kos otomatis terisi dari pendaftaran awal pemilik baru.
+  * Skrip SQL [`supabase_unique_kode_kost.sql`](supabase_unique_kode_kost.sql) dengan indeks unik case-insensitive (`UPPER(TRIM(kode_kost))`) dan validasi ketersediaan kode secara real-time di `kos_service.dart`.
+* **Pembatasan Akses Fitur (*Feature Gating*) Kos Belum Terverifikasi:**
+  * Seluruh fitur operasional terkunci secara visual dengan ikon gembok selama properti belum berstatus `active`.
+  * Dialog instruktif *"Fitur Terkunci"* muncul jika pemilik mencoba mengakses menu operasional sebelum disetujui Super Admin.
 
-### C. Keamanan Database & Penyelesaian Isu Nama "Fatimah"
-* **Evaluasi Keamanan RLS Supabase:**
-  * Menghindari risiko keamanan RLS dimatikan di lingkungan produksi.
-  * Dibuat skrip arsitektur keamanan ketat `supabase_secure_rbac_policies.sql` untuk mengisolasi data keuangan, bukti bayar, dan kamar antarpenghuni.
-* **Perbaikan Sinkronisasi Nama Calon Penghuni:**
-  * Mengatasi masalah nama calon penghuni tampil sebagai *"Calon Penghuni"* padahal di database bernama *Fatimah*.
-  * Diperbaiki pembacaan data di `kos_service.dart`, `tenant_allocation_screen.dart`, dan `auth_service.dart`.
-  * Disediakan skrip SQL sinkronisasi instan di `supabase_sync_candidate_names.sql`.
+### C. Enforcement Paket Freemium 2-Tier: Starter vs Juragan (PRD v2 Modul 3)
+* **Kuota Kamar Dinamis:**
+  * Progress bar kuota kamar di [`room_management_screen.dart`](atur_kos/lib/screens/owner/room_management_screen.dart).
+  * Paket Starter dibatasi maksimal 5 kamar. Jika kuota penuh, tombol tambah kamar terkunci dan menampilkan modal penawaran upgrade ke Paket Juragan (s/d 25 kamar, otomasi WA reminder, dan AI poster) dengan opsi langganan Bulanan (Rp 50.000) atau Tahunan (Rp 500.000).
+
+### D. Manajemen Kamar, Alokasi Penghuni & Tagihan Pertama (PRD Modul 2 & 3)
+* **Alur Calon Penghuni Masuk:**
+  * Penghuni memasukkan kode undangan di dasbor (`joinKosByInvitationCode`), akun otomatis terhubung ke properti kos.
+* **Layar Alokasi Kamar ([`tenant_allocation_screen.dart`](atur_kos/lib/screens/owner/tenant_allocation_screen.dart)):**
+  * Pemilik memilih calon penghuni, memilih kamar kosong, menentukan harga sewa dan siklus jatuh tempo.
+  * Saat alokasi disimpan, kamar otomatis berubah status jadi terisi, kontrak tercatat di `tenants`, dan invoice perdana otomatis terbit di tabel `invoices`.
+
+### E. Keamanan Database & Skrip Migrasi
+* Kebijakan keamanan RLS granular berbasis Role: [`supabase_secure_rbac_policies.sql`](supabase_secure_rbac_policies.sql).
+* Migrasi v2 multi-tenant & geolokasi: [`supabase_migration_v2.sql`](supabase_migration_v2.sql).
+* Penanganan pendaftaran pemilik kos: [`supabase_fix_owner_registration.sql`](supabase_fix_owner_registration.sql).
+* Pencegahan duplikasi kode kos: [`supabase_unique_kode_kost.sql`](supabase_unique_kode_kost.sql).
 
 ---
 
-## 📁 3. File Kunci yang Dibuat & Dimodifikasi
+## 📁 3. File Kunci Proyek
 
 | Kategori | File | Peran / Fungsi |
 | :--- | :--- | :--- |
-| **Database SQL** | `supabase_secure_rbac_policies.sql` | Kebijakan keamanan RLS granular berbasis Role (Owner vs Tenant). |
-| **Database SQL** | `supabase_sync_candidate_names.sql` | Sinkronisasi nama pengguna dari `auth.users` ke `public.profiles`. |
-| **Database SQL** | `supabase_fix_rls_tenants.sql` | Perbaikan izin RLS pada relasi tabel penyewa. |
-| **Database SQL** | `supabase_fix_signup.sql` | Penanganan trigger pendaftaran pengguna baru. |
-| **Flutter UI** | `tenant_allocation_screen.dart` | Antarmuka alokasi kamar kosong ke calon penghuni & daftar penghuni aktif. |
-| **Flutter UI** | `tenant_dashboard_screen.dart` | Dasbor penghuni, input kode undangan kos, info sewa & tagihan. |
-| **Flutter UI** | `owner_dashboard_screen.dart` | Dasbor ringkasan pemilik, KPI hunian kamar, dan aksi cepat. |
-| **Flutter UI** | `forgot_password_screen.dart` | Layar permintaan kirim tautan reset kata sandi ke email. |
-| **Flutter UI** | `reset_password_screen.dart` | Layar pengisian kata sandi baru dari tautan reset. |
-| **Flutter UI** | `room_poster_generator_screen.dart` | Generator poster kamar kosong berbasis template. |
-| **Flutter Service** | `kos_service.dart` | Logika operasional kos: alokasi kamar, kode undangan, tagihan, KPI kas. |
-| **Flutter Service** | `auth_service.dart` | Manajemen login, Google OAuth, sinkronisasi profil, dan lupa sandi. |
-| **Flutter Utils** | `format_utils.dart` | Utilitas format mata uang Rupiah dan tanggal Indonesia. |
+| **Spesifikasi** | `PRD_v2.md` | Dokumen PRD v2.0.0 (SaaS Multi-Tenant, Super Admin & Freemium 2-Tier). |
+| **Database SQL** | `supabase_migration_v2.sql` | Skema DDL tabel `kosts`, geolokasi, status verifikasi, dan subscription tier. |
+| **Database SQL** | `supabase_unique_kode_kost.sql` | Indeks unik case-insensitive untuk kode undangan kos. |
+| **Database SQL** | `supabase_fix_owner_registration.sql` | Perbaikan alur registrasi pemilik dan pembuatan properti kos otomatis. |
+| **Database SQL** | `supabase_secure_rbac_policies.sql` | Kebijakan Row Level Security (RLS) granular multi-tenant. |
+| **Flutter Models** | `kost_model.dart` | Entitas data kos, geolokasi, dokumen KTP/bangunan, status, dan tier langganan. |
+| **Flutter Models** | `user_profile.dart` | Model profil pengguna dengan peran Super Admin, Owner, dan Tenant. |
+| **Flutter UI (Admin)** | `super_admin_dashboard_screen.dart` | Portal Super Admin: verifikasi properti, preview KTP/bangunan, aksi setujui/tolak. |
+| **Flutter UI (Owner)** | `owner_dashboard_screen.dart` | Dasbor pemilik: banner verifikasi, feature gating, akses Super Admin, KPI kos. |
+| **Flutter UI (Owner)** | `kos_settings_screen.dart` | Pengaturan kos: Tautan Google Maps, GPS timeout, upload foto KTP & bangunan. |
+| **Flutter UI (Owner)** | `room_management_screen.dart` | Manajemen kamar & enforcement kuota freemium (5 kamar Starter vs 25 Juragan). |
+| **Flutter UI (Owner)** | `tenant_allocation_screen.dart` | Alokasi kamar ke calon penghuni & penerbitan tagihan pertama otomatis. |
+| **Flutter Service** | `kos_service.dart` | Operasional kos: verifikasi admin, kuota langganan, GPS koordinat, alokasi kamar. |
+| **Flutter Service** | `auth_service.dart` | Layanan autentikasi Supabase, Google OAuth, registrasi peran, dan lupa sandi. |
 
 ---
 
-## 📈 4. Pemetaan Progres Sesuai Dokumen PRD
+## 📈 4. Pemetaan Progres Sesuai Dokumen PRD v2
 
 ```text
-PRD Modul 1: Autentikasi & RBAC           [████████████████████] 100% (SELESAI)
-PRD Modul 2: Inventaris & Alokasi Kamar   [████████████████████] 100% (SELESAI)
-PRD Modul 3: Finansial & Tagihan Sewa     [██████████░░░░░░░░░░]  50% (SEDANG BERJALAN)
-PRD Modul 4: Tiket Keluhan & Perbaikan    [░░░░░░░░░░░░░░░░░░░░]   0% (MENUNGGU)
-PRD Modul 5: Dashboard & Pengumuman       [████████░░░░░░░░░░░░]  40% (SEDANG BERJALAN)
+PRD v2 Modul 1: Autentikasi & RBAC (3 Roles)  [████████████████████] 100% (SELESAI)
+PRD v2 Modul 2: Onboarding Kos & Verifikasi   [████████████████████] 100% (SELESAI)
+PRD v2 Modul 2: Inventaris & Alokasi Kamar    [████████████████████] 100% (SELESAI)
+PRD v2 Modul 3: Kuota Freemium (2-Tier)       [████████████████████] 100% (SELESAI)
+PRD v2 Modul 4: Smart Billing & Pembayaran    [██████████░░░░░░░░░░]  50% (BERJALAN)
+PRD v2 Modul 5: Sistem Tiket Keluhan          [░░░░░░░░░░░░░░░░░░░░]   0% (MENUNGGU)
+PRD v2 Modul 6: Dashboard & Poster AI         [████████░░░░░░░░░░░░]  40% (BERJALAN)
 ```
 
 ---
 
-## 🎯 5. Langkah Selanjutnya Sesuai PRD (Next Roadmap)
+## 🎯 5. Roadmap Langkah Selanjutnya (Next Steps)
 
-* **Modul 3: Alur Pembayaran & Verifikasi Bukti Transfer (US-3.2 & US-3.3)**
-  * **Sisi Penghuni:** Menampilkan rincian tagihan sewa bulanan dan formulir unggah bukti transfer pembayaran (foto/gambar struk).
-  * **Sisi Pemilik Kos:** Menu verifikasi pembayaran masuk (Terima / Tolak bukti pembayaran) yang otomatis mengubah status tagihan menjadi *Lunas* dan mencatatnya ke pemasukan kas riil.
-* **Modul 3: Peringatan Jatuh Tempo & Reminder WhatsApp (US-3.4)**
-  * Notifikasi/tombol kirim tagihan & pengingat jatuh tempo ke WhatsApp penghuni yang menunggak bayar.
-* **Modul 4: Sistem Tiket Keluhan (*Ticketing System*) (US-4.1 & US-4.2)**
-  * Penghuni dapat mengajukan komplain fasilitas (Kamar Pribadi vs Fasilitas Umum) lengkap dengan foto.
-  * Pemilik memproses status keluhan (`Diajukan` $\rightarrow$ `Diproses` $\rightarrow$ `Selesai`).
-* **Modul 5: Papan Pengumuman Digital Kos & Ekspor Laporan Keuangan (US-5.1 & US-5.5)**
-  * Siaran informasi operasional kos dari pemilik ke seluruh penghuni.
-  * Ekspor laporan pemasukan dan tunggakan sewa.
+* **Modul 4: Integrasi Payment Gateway Midtrans (US-4.1 s/d US-4.3)**
+  * Menampilkan rincian tagihan sewa dan tombol bayar instan di akun penghuni.
+  * Integrasi Midtrans Snap (QRIS & Virtual Account) dan simulasi webhook settlement.
+  * Penerbitan Kuitansi Digital ber-QR Code verifikasi anti-manipulasi dan sinkronisasi kas masuk.
+* **Modul 5: Sistem Tiket Keluhan Kerusakan Fasilitas (US-5.1 & US-5.2)**
+  * Pelaporan komplain kamar pribadi dan fasilitas umum beserta foto bukti.
+  * Alur penanganan status perbaikan oleh pemilik kos.
+* **Modul 6: Otomasi Reminder WhatsApp & Radar H-30 (US-6.1 & US-6.2)**
+  * Notifikasi pengingat jatuh tempo sewa ke nomor WhatsApp penghuni.
+  * Formulir komitmen perpanjangan sewa H-30 dan mitigasi kamar kosong.
 
 ---
 
 ## 🛠️ Cara Menjalankan Aplikasi
 
-1. Masuk ke folder aplikasi Flutter:
+1. Masuk ke direktori aplikasi Flutter:
    ```bash
    cd atur_kos
    ```
-2. Jalankan dependensi:
+2. Pastikan dependensi sinkron:
    ```bash
    flutter pub get
    ```

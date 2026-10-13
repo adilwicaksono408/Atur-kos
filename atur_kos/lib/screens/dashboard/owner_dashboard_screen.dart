@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:atur_kos/models/user_profile.dart';
 import 'package:atur_kos/services/auth_service.dart';
 import 'package:atur_kos/services/kos_service.dart';
@@ -9,6 +10,7 @@ import 'package:atur_kos/screens/owner/invoice_management_screen.dart';
 import 'package:atur_kos/screens/owner/tenant_allocation_screen.dart';
 import 'package:atur_kos/screens/owner/complaint_management_screen.dart';
 import 'package:atur_kos/screens/owner/room_poster_generator_screen.dart';
+import 'package:atur_kos/screens/admin/super_admin_dashboard_screen.dart';
 import 'package:atur_kos/utils/format_utils.dart';
 
 /// Halaman Dasbor Utama untuk Peran Pemilik Kos (Owner)
@@ -30,6 +32,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
   OperationalSummary _summary = const OperationalSummary();
   List<Map<String, dynamic>> _pendingInvoices = [];
   bool _isLoading = true;
+  bool _hasCheckedVerificationOnboarding = false;
 
   @override
   void initState() {
@@ -40,7 +43,19 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
   /// Mengambil data properti, ringkasan operasional real-time, dan tagihan pending
   Future<void> _fetchDashboardData() async {
     setState(() => _isLoading = true);
-    final kostId = widget.profile.kostId;
+    final user = Supabase.instance.client.auth.currentUser;
+    String? kostId = widget.profile.kostId;
+
+    if (user != null && widget.profile.role == UserRole.owner) {
+      final syncedKostId = await KosService.ensureOwnerKosProfile(
+        userId: user.id,
+        userMetadata: user.userMetadata,
+        currentKostId: kostId,
+      );
+      if (syncedKostId != null && syncedKostId.isNotEmpty) {
+        kostId = syncedKostId;
+      }
+    }
 
     final results = await Future.wait([
       KosService.getKosProfile(kostId),
@@ -55,11 +70,288 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
         _pendingInvoices = results[2] as List<Map<String, dynamic>>;
         _isLoading = false;
       });
+      _checkAndPromptVerificationOnboarding();
+    }
+  }
+
+  /// Membuka form Pengaturan & Pengajuan Verifikasi Kos
+  Future<void> _openKosSettings() async {
+    final metaKosName = Supabase.instance.client.auth.currentUser?.userMetadata?['nama_kost']?.toString();
+    final kosName = _kosProfile?['nama_kost']?.toString() ??
+        metaKosName ??
+        'Kos Princess';
+    final resolvedKostId = _kosProfile?['id']?.toString() ?? widget.profile.kostId;
+
+    final updated = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => KosSettingsScreen(
+          kostId: resolvedKostId,
+          currentKosName: kosName,
+        ),
+      ),
+    );
+    if (updated == true) {
+      _fetchDashboardData();
+    }
+  }
+
+  /// Memeriksa apakah kos pemilik baru ini perlu langsung dimintai pengajuan verifikasi
+  void _checkAndPromptVerificationOnboarding() {
+    if (_hasCheckedVerificationOnboarding) return;
+    _hasCheckedVerificationOnboarding = true;
+
+    final status = _kosProfile?['status_verifikasi']?.toString() ?? 'pending_verification';
+    final ktpUrl = _kosProfile?['dokumen_ktp_url']?.toString();
+    final fotoUrl = _kosProfile?['foto_bangunan_url']?.toString();
+    final isDokumenLengkap = (ktpUrl != null && ktpUrl.isNotEmpty) && (fotoUrl != null && fotoUrl.isNotEmpty);
+
+    // Jika properti belum berstatus active, dorong pemilik baru untuk melengkapi dokumen
+    if (status != 'active') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _showVerificationOnboardingDialog(
+          status: status,
+          isDokumenLengkap: isDokumenLengkap,
+        );
+      });
+    }
+  }
+
+  /// Dialog onboarding pengajuan verifikasi kos ke Super Admin
+  void _showVerificationOnboardingDialog({
+    required String status,
+    required bool isDokumenLengkap,
+  }) {
+    final hasMaps = _kosProfile?['google_maps_url'] != null && _kosProfile!['google_maps_url'].toString().isNotEmpty;
+    final hasFoto = _kosProfile?['foto_bangunan_url'] != null && _kosProfile!['foto_bangunan_url'].toString().isNotEmpty;
+    final hasKtp = _kosProfile?['dokumen_ktp_url'] != null && _kosProfile!['dokumen_ktp_url'].toString().isNotEmpty;
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        contentPadding: const EdgeInsets.fromLTRB(22, 20, 22, 16),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E40AF).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.verified_user_rounded, color: Color(0xFF1E40AF), size: 28),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Pendaftaran Kos Baru',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                  ),
+                  Text(
+                    'Verifikasi Super Admin',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              status == 'rejected'
+                  ? 'Pengajuan verifikasi kos sebelumnya memerlukan revisi. Harap perbaiki dokumen Anda untuk ditinjau ulang oleh Super Admin.'
+                  : 'Selamat datang di Atur Kos! Untuk menjamin legalitas properti dan keamanan calon penghuni, kos Anda wajib diajukan ke Super Admin untuk diverifikasi resmi.',
+              style: const TextStyle(fontSize: 13, color: Color(0xFF334155), height: 1.45),
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Column(
+                children: [
+                  _buildRequirementItem(
+                    icon: Icons.map_rounded,
+                    title: 'Tautan Google Maps',
+                    desc: hasMaps ? 'Sudah terpasang' : 'Wajib diisi untuk lokasi',
+                    isReady: hasMaps,
+                  ),
+                  const Divider(height: 14),
+                  _buildRequirementItem(
+                    icon: Icons.apartment_rounded,
+                    title: 'Foto Fisik Bangunan',
+                    desc: hasFoto ? 'Foto sudah diunggah' : 'Ambil dari kamera / galeri',
+                    isReady: hasFoto,
+                  ),
+                  const Divider(height: 14),
+                  _buildRequirementItem(
+                    icon: Icons.badge_outlined,
+                    title: 'Foto KTP Pemilik / Pengelola',
+                    desc: hasKtp ? 'Foto KTP sudah diunggah' : 'Bukti identitas pengelola',
+                    isReady: hasKtp,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Nanti Dulu', style: TextStyle(color: Color(0xFF64748B))),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _openKosSettings();
+            },
+            icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+            label: Text(isDokumenLengkap ? 'Periksa Dokumen' : 'Lengkapi & Ajukan Sekarang'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1E40AF),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRequirementItem({
+    required IconData icon,
+    required String title,
+    required String desc,
+    required bool isReady,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, color: isReady ? const Color(0xFF059669) : const Color(0xFF64748B), size: 18),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A)),
+              ),
+              Text(
+                desc,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isReady ? const Color(0xFF059669) : const Color(0xFF64748B),
+                  fontWeight: isReady ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Icon(
+          isReady ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+          color: isReady ? const Color(0xFF059669) : const Color(0xFF94A3B8),
+          size: 16,
+        ),
+      ],
+    );
+  }
+
+  /// Memeriksa hak akses fitur: fitur dikunci jika kos belum berstatus active (disetujui Super Admin)
+  void _guardedFeatureAction(String featureName, VoidCallback onGranted) {
+    final isVerified = _kosProfile?['status_verifikasi'] == 'active';
+    if (isVerified) {
+      onGranted();
+    } else {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: const Row(
+            children: [
+              Icon(Icons.lock_rounded, color: Color(0xFFD97706), size: 24),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Fitur Terkunci',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Fitur "$featureName" belum dapat diakses. Kos Anda wajib diajukan dan disetujui verifikasinya oleh Super Admin terlebih dahulu sebelum operasional kamar dan transaksi dapat digunakan.',
+                style: const TextStyle(fontSize: 13, color: Color(0xFF334155), height: 1.45),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFFCD34D)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline_rounded, color: Color(0xFFB45309), size: 18),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Lengkapi lokasi Maps, foto bangunan, dan foto KTP Anda.',
+                        style: TextStyle(fontSize: 11, color: Color(0xFF92400E), fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _openKosSettings();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1E40AF),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text('Ajukan Verifikasi'),
+            ),
+          ],
+        ),
+      );
     }
   }
 
   /// Verifikasi cepat pembayaran dari dasbor (PRD US-3.3 & US-6.1)
   Future<void> _verifyInvoiceQuick(Map<String, dynamic> invoice) async {
+    final isVerified = _kosProfile?['status_verifikasi'] == 'active';
+    if (!isVerified) {
+      _guardedFeatureAction('Verifikasi Pembayaran', () {});
+      return;
+    }
+
     final invoiceId = invoice['id'].toString();
     final nomorInvoice = invoice['nomor_invoice']?.toString() ?? '-';
     final nominal = (invoice['nominal'] as num?)?.toDouble() ?? 0.0;
@@ -149,6 +441,34 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
     return name;
   }
 
+  Color _getVerificationStatusColor(String? status) {
+    switch (status) {
+      case 'active':
+        return const Color(0xFF10B981);
+      case 'rejected':
+        return Colors.red.shade700;
+      case 'suspended':
+        return Colors.orange.shade800;
+      case 'pending_verification':
+      default:
+        return const Color(0xFFD97706);
+    }
+  }
+
+  String _getVerificationStatusLabel(String? status) {
+    switch (status) {
+      case 'active':
+        return 'Terverifikasi';
+      case 'rejected':
+        return 'Ditolak';
+      case 'suspended':
+        return 'Menunggu Verifikasi';
+      case 'pending_verification':
+      default:
+        return 'Menunggu Verifikasi';
+    }
+  }
+
   void _shareInvitationCode(BuildContext context, String code, String kosName) {
     final invitationText =
         'Halo! Silakan unduh aplikasi Atur Kos dan masukkan Kode Undangan: $code saat mendaftar untuk terhubung langsung ke $kosName.';
@@ -178,6 +498,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
     final theme = Theme.of(context);
     final kosName = _kosProfile?['nama_kost']?.toString() ?? 'Kos Princess';
     final resolvedKostId = widget.profile.kostId ?? _kosProfile?['id']?.toString();
+    final isVerified = _kosProfile?['status_verifikasi'] == 'active';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -185,7 +506,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        titleSpacing: 20,
+        titleSpacing: 12,
         title: Row(
           children: [
             Container(
@@ -238,29 +559,50 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
           IconButton(
             tooltip: 'Pengaturan Properti Kos',
             icon: const Icon(Icons.tune_rounded, color: Color(0xFF1E40AF)),
-            onPressed: () async {
-              final updated = await Navigator.push<bool>(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => KosSettingsScreen(
-                    kostId: resolvedKostId,
-                    currentKosName: kosName,
+            onPressed: _openKosSettings,
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'Menu Lainnya',
+            icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF1E40AF)),
+            onSelected: (val) async {
+              if (val == 'admin') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => SuperAdminDashboardScreen(
+                      profile: widget.profile.copyWith(role: UserRole.superAdmin),
+                    ),
                   ),
-                ),
-              );
-              if (updated == true) {
-                _fetchDashboardData();
+                );
+              } else if (val == 'logout') {
+                await AuthService.signOut();
               }
             },
+            itemBuilder: (ctx) => [
+              const PopupMenuItem(
+                value: 'admin',
+                child: Row(
+                  children: [
+                    Icon(Icons.admin_panel_settings_rounded, color: Color(0xFF1E40AF), size: 20),
+                    SizedBox(width: 10),
+                    Text('Portal Super Admin'),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout_rounded, color: Colors.red, size: 20),
+                    SizedBox(width: 10),
+                    Text('Keluar Akun', style: TextStyle(color: Colors.red)),
+                  ],
+                ),
+              ),
+            ],
           ),
-          IconButton(
-            tooltip: 'Keluar Akun',
-            icon: const Icon(Icons.logout_rounded, color: Color(0xFF64748B)),
-            onPressed: () async {
-              await AuthService.signOut();
-            },
-          ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 4),
         ],
       ),
       body: SafeArea(
@@ -321,21 +663,45 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                               ],
                             ),
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF10B981),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Text(
-                              'Sistem Aktif',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  _kosProfile?['tier']?.toString().toLowerCase() == 'juragan'
+                                      ? '⭐ Paket Juragan'
+                                      : 'Paket Starter (Maks 5)',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               ),
-                            ),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: _getVerificationStatusColor(_kosProfile?['status_verifikasi']?.toString()),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  _getVerificationStatusLabel(_kosProfile?['status_verifikasi']?.toString()),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -361,6 +727,249 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                     ],
                   ),
                 ),
+
+                // Banner Interaktif Pengajuan Verifikasi Super Admin
+                if (_kosProfile != null && _kosProfile?['status_verifikasi'] != 'active') ...[
+                  () {
+                    final statusVerifikasi = _kosProfile?['status_verifikasi']?.toString() ?? 'pending_verification';
+                    final hasFotoBangunan = _kosProfile?['foto_bangunan_url'] != null && _kosProfile!['foto_bangunan_url'].toString().isNotEmpty;
+                    final hasDokumenKtp = _kosProfile?['dokumen_ktp_url'] != null && _kosProfile!['dokumen_ktp_url'].toString().isNotEmpty;
+                    final isDokumenLengkap = hasFotoBangunan && hasDokumenKtp;
+
+                    if (statusVerifikasi == 'rejected') {
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 14),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEE2E2),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFFCA5A5)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(Icons.error_outline_rounded, color: Colors.red, size: 24),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Pengajuan Verifikasi Kos Ditolak',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF991B1B),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Catatan Admin: ${_kosProfile?['catatan_verifikasi_admin'] ?? "Data fisik / KTP belum valid"}. Silakan perbaiki data properti Anda.',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.red.shade900,
+                                            height: 1.4,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  onPressed: _openKosSettings,
+                                  icon: const Icon(Icons.edit_note_rounded, size: 18),
+                                  label: const Text('Perbaiki Dokumen & Ajukan Ulang'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFFDC2626),
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    padding: const EdgeInsets.symmetric(vertical: 10),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
+
+                    if (!isDokumenLengkap) {
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 14),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF3C7),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFFCD34D)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(Icons.assignment_late_rounded, color: Color(0xFFB45309), size: 24),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Pengajuan Verifikasi Kos Diperlukan',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF92400E),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Sebagai pemilik kos baru, Anda wajib mengajukan dokumen verifikasi (Foto KTP dan Foto Bangunan) ke Super Admin agar properti resmi diaktifkan.',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.amber.shade900,
+                                            height: 1.4,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: hasFotoBangunan ? const Color(0xFFD1FAE5) : const Color(0xFFFEE2E2),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      hasFotoBangunan ? '✓ Foto Bangunan Ada' : '✗ Foto Bangunan Kosong',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: hasFotoBangunan ? const Color(0xFF065F46) : const Color(0xFF991B1B),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: hasDokumenKtp ? const Color(0xFFD1FAE5) : const Color(0xFFFEE2E2),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      hasDokumenKtp ? '✓ KTP Ada' : '✗ KTP Kosong',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: hasDokumenKtp ? const Color(0xFF065F46) : const Color(0xFF991B1B),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  onPressed: _openKosSettings,
+                                  icon: const Icon(Icons.upload_file_rounded, size: 18),
+                                  label: const Text('Lengkapi Dokumen & Ajukan Sekarang'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFFD97706),
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    padding: const EdgeInsets.symmetric(vertical: 10),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
+
+                    // Dokumen Lengkap tapi masih Menunggu Peninjauan Admin
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 14),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFBFDBFE)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.hourglass_top_rounded, color: Color(0xFF1E40AF), size: 24),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'Pengajuan Sedang Ditinjau Super Admin',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF1E3A8A),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      const Text(
+                                        'Dokumen KTP dan foto fisik bangunan kos Anda telah lengkap dan sedang diverifikasi oleh Super Admin Atur Kos.',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Color(0xFF1E40AF),
+                                          height: 1.4,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: _openKosSettings,
+                                icon: const Icon(Icons.visibility_rounded, size: 18),
+                                label: const Text('Periksa Dokumen Pengajuan'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF1E40AF),
+                                  side: const BorderSide(color: Color(0xFF93C5FD)),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }(),
+                ],
 
                 const SizedBox(height: 18),
 
@@ -421,17 +1030,26 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: Colors.green.shade50,
+                                    color: isVerified ? Colors.green.shade50 : const Color(0xFFFEF3C7),
                                     borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: Colors.green.shade200),
+                                    border: Border.all(color: isVerified ? Colors.green.shade200 : const Color(0xFFFCD34D)),
                                   ),
-                                  child: Text(
-                                    'Aktif',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.green.shade700,
-                                    ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (!isVerified) ...[
+                                        const Icon(Icons.lock_rounded, size: 10, color: Color(0xFFB45309)),
+                                        const SizedBox(width: 3),
+                                      ],
+                                      Text(
+                                        isVerified ? 'Aktif' : 'Menunggu Verifikasi',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: isVerified ? Colors.green.shade700 : const Color(0xFFB45309),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
@@ -443,12 +1061,14 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                         onPressed: () {
                           final code =
                               _kosProfile?['kode_kost']?.toString() ?? 'PRINCESS';
-                          _shareInvitationCode(context, code, kosName);
+                          _guardedFeatureAction('Bagikan Kode Undangan', () {
+                            _shareInvitationCode(context, code, kosName);
+                          });
                         },
-                        icon: const Icon(Icons.copy_rounded, size: 16),
-                        label: const Text('Bagikan'),
+                        icon: Icon(isVerified ? Icons.copy_rounded : Icons.lock_outline_rounded, size: 16),
+                        label: Text(isVerified ? 'Bagikan' : 'Terkunci'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF1E40AF),
+                          backgroundColor: isVerified ? const Color(0xFF1E40AF) : const Color(0xFF64748B),
                           foregroundColor: Colors.white,
                           elevation: 0,
                           padding: const EdgeInsets.symmetric(
@@ -504,16 +1124,19 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                               '${_summary.occupancyRate.toStringAsFixed(0)}% (${_summary.emptyRooms} Kamar Kosong)',
                           icon: Icons.meeting_room_rounded,
                           color: const Color(0xFF2563EB),
+                          isLocked: !isVerified,
                           onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => RoomManagementScreen(
-                                  kostId: resolvedKostId,
-                                  kosName: kosName,
+                            _guardedFeatureAction('Tingkat Okupansi & Kamar', () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => RoomManagementScreen(
+                                    kostId: resolvedKostId,
+                                    kosName: kosName,
+                                  ),
                                 ),
-                              ),
-                            ).then((_) => _fetchDashboardData());
+                              ).then((_) => _fetchDashboardData());
+                            });
                           },
                         ),
                         _buildMetricCard(
@@ -522,16 +1145,19 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                           subtext: 'Kas masuk lunas bulan ini',
                           icon: Icons.account_balance_wallet_rounded,
                           color: const Color(0xFF059669),
+                          isLocked: !isVerified,
                           onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => InvoiceManagementScreen(
-                                  kostId: resolvedKostId,
-                                  kosName: kosName,
+                            _guardedFeatureAction('Kas Masuk Riil & Tagihan', () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => InvoiceManagementScreen(
+                                    kostId: resolvedKostId,
+                                    kosName: kosName,
+                                  ),
                                 ),
-                              ),
-                            ).then((_) => _fetchDashboardData());
+                              ).then((_) => _fetchDashboardData());
+                            });
                           },
                         ),
                         _buildMetricCard(
@@ -541,16 +1167,19 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                               '${_summary.tunggakanCount} tagihan belum bayar',
                           icon: Icons.warning_amber_rounded,
                           color: const Color(0xFFDC2626),
+                          isLocked: !isVerified,
                           onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => InvoiceManagementScreen(
-                                  kostId: resolvedKostId,
-                                  kosName: kosName,
+                            _guardedFeatureAction('Tunggakan Sewa & Tagihan', () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => InvoiceManagementScreen(
+                                    kostId: resolvedKostId,
+                                    kosName: kosName,
+                                  ),
                                 ),
-                              ),
-                            ).then((_) => _fetchDashboardData());
+                              ).then((_) => _fetchDashboardData());
+                            });
                           },
                         ),
                         _buildMetricCard(
@@ -559,16 +1188,19 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                           subtext: 'Perlu konfirmasi Anda',
                           icon: Icons.pending_actions_rounded,
                           color: const Color(0xFFD97706),
+                          isLocked: !isVerified,
                           onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => InvoiceManagementScreen(
-                                  kostId: resolvedKostId,
-                                  kosName: kosName,
+                            _guardedFeatureAction('Verifikasi Pembayaran', () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => InvoiceManagementScreen(
+                                    kostId: resolvedKostId,
+                                    kosName: kosName,
+                                  ),
                                 ),
-                              ),
-                            ).then((_) => _fetchDashboardData());
+                              ).then((_) => _fetchDashboardData());
+                            });
                           },
                         ),
                       ],
@@ -597,16 +1229,19 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                         color: const Color(0xFF2563EB),
                         title: 'Kelola Kamar',
                         subtitle: 'Inventaris & Preset Kamar',
+                        isLocked: !isVerified,
                         onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => RoomManagementScreen(
-                                kostId: resolvedKostId,
-                                kosName: kosName,
+                          _guardedFeatureAction('Kelola Kamar', () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => RoomManagementScreen(
+                                  kostId: resolvedKostId,
+                                  kosName: kosName,
+                                ),
                               ),
-                            ),
-                          ).then((_) => _fetchDashboardData());
+                            ).then((_) => _fetchDashboardData());
+                          });
                         },
                       ),
                     ),
@@ -617,16 +1252,19 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                         color: const Color(0xFF0284C7),
                         title: 'Alokasi Penghuni',
                         subtitle: 'Hubungkan Akun ke Kamar',
+                        isLocked: !isVerified,
                         onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => TenantAllocationScreen(
-                                kostId: resolvedKostId,
-                                kosName: kosName,
+                          _guardedFeatureAction('Alokasi Penghuni', () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => TenantAllocationScreen(
+                                  kostId: resolvedKostId,
+                                  kosName: kosName,
+                                ),
                               ),
-                            ),
-                          ).then((_) => _fetchDashboardData());
+                            ).then((_) => _fetchDashboardData());
+                          });
                         },
                       ),
                     ),
@@ -641,16 +1279,19 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                         color: const Color(0xFF059669),
                         title: 'Smart Billing & Kas',
                         subtitle: 'Tagihan & Pengingat WA',
+                        isLocked: !isVerified,
                         onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => InvoiceManagementScreen(
-                                kostId: resolvedKostId,
-                                kosName: kosName,
+                          _guardedFeatureAction('Smart Billing & Kas', () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => InvoiceManagementScreen(
+                                  kostId: resolvedKostId,
+                                  kosName: kosName,
+                                ),
                               ),
-                            ),
-                          ).then((_) => _fetchDashboardData());
+                            ).then((_) => _fetchDashboardData());
+                          });
                         },
                       ),
                     ),
@@ -661,16 +1302,19 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                         color: const Color(0xFFDC2626),
                         title: 'Helpdesk Keluhan',
                         subtitle: '${_summary.activeComplaintsCount} tiket aktif',
+                        isLocked: !isVerified,
                         onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => ComplaintManagementScreen(
-                                kostId: resolvedKostId,
-                                kosName: kosName,
+                          _guardedFeatureAction('Helpdesk Keluhan', () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ComplaintManagementScreen(
+                                  kostId: resolvedKostId,
+                                  kosName: kosName,
+                                ),
                               ),
-                            ),
-                          ).then((_) => _fetchDashboardData());
+                            ).then((_) => _fetchDashboardData());
+                          });
                         },
                       ),
                     ),
@@ -682,16 +1326,19 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                   color: const Color(0xFFD97706),
                   title: 'Poster Promosi AI & Radar H-30',
                   subtitle: 'Pemasaran kamar kosong & radar konfirmasi akhir sewa',
+                  isLocked: !isVerified,
                   onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => RoomPosterGeneratorScreen(
-                          kostId: resolvedKostId,
-                          kosName: kosName,
+                    _guardedFeatureAction('Poster Promosi AI & Radar H-30', () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => RoomPosterGeneratorScreen(
+                            kostId: resolvedKostId,
+                            kosName: kosName,
+                          ),
                         ),
-                      ),
-                    ).then((_) => _fetchDashboardData());
+                      ).then((_) => _fetchDashboardData());
+                    });
                   },
                 ),
 
@@ -767,15 +1414,17 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                         const SizedBox(height: 12),
                         OutlinedButton(
                           onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => InvoiceManagementScreen(
-                                  kostId: resolvedKostId,
-                                  kosName: kosName,
+                            _guardedFeatureAction('Kelola Tagihan & Kas', () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => InvoiceManagementScreen(
+                                    kostId: resolvedKostId,
+                                    kosName: kosName,
+                                  ),
                                 ),
-                              ),
-                            ).then((_) => _fetchDashboardData());
+                              ).then((_) => _fetchDashboardData());
+                            });
                           },
                           child: const Text('Buka Kelola Tagihan & Kas'),
                         ),
@@ -958,6 +1607,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
     required String subtext,
     required IconData icon,
     required Color color,
+    bool isLocked = false,
     VoidCallback? onTap,
   }) {
     return Material(
@@ -970,7 +1620,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0xFFF1F5F9)),
+            border: Border.all(color: isLocked ? const Color(0xFFFDE68A) : const Color(0xFFF1F5F9)),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.02),
@@ -987,22 +1637,38 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(
-                    child: Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF64748B),
-                      ),
+                    child: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            title,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isLocked ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                            ),
+                          ),
+                        ),
+                        if (isLocked) ...[
+                          const SizedBox(width: 4),
+                          const Icon(Icons.lock_rounded, size: 12, color: Color(0xFFD97706)),
+                        ],
+                      ],
                     ),
                   ),
                   Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.1),
+                      color: isLocked
+                          ? Colors.grey.shade100
+                          : color.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(icon, color: color, size: 16),
+                    child: Icon(
+                      isLocked ? Icons.lock_outline_rounded : icon,
+                      color: isLocked ? const Color(0xFF94A3B8) : color,
+                      size: 16,
+                    ),
                   ),
                 ],
               ),
@@ -1010,23 +1676,23 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    value,
-                    style: const TextStyle(
-                      fontSize: 18,
+                    isLocked ? 'Terkunci' : value,
+                    style: TextStyle(
+                      fontSize: isLocked ? 15 : 18,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF0F172A),
+                      color: isLocked ? const Color(0xFF64748B) : const Color(0xFF0F172A),
                       letterSpacing: -0.3,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    subtext,
+                    isLocked ? 'Perlu verifikasi kos' : subtext,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
-                      color: color,
+                      color: isLocked ? const Color(0xFFB45309) : color,
                     ),
                   ),
                 ],
@@ -1044,6 +1710,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
     required String title,
     required String subtitle,
     required VoidCallback onTap,
+    bool isLocked = false,
   }) {
     return Material(
       color: Colors.white,
@@ -1055,37 +1722,66 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0xFFF1F5F9)),
+            border: Border.all(color: isLocked ? const Color(0xFFFDE68A) : const Color(0xFFF1F5F9)),
           ),
           child: Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
+                  color: isLocked
+                      ? const Color(0xFFFEF3C7)
+                      : color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, color: color, size: 22),
+                child: Icon(
+                  isLocked ? Icons.lock_rounded : icon,
+                  color: isLocked ? const Color(0xFFD97706) : color,
+                  size: 22,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF0F172A),
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: isLocked ? const Color(0xFF475569) : const Color(0xFF0F172A),
+                            ),
+                          ),
+                        ),
+                        if (isLocked)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF3C7),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'Terkunci',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFFB45309),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      subtitle,
-                      style: const TextStyle(
+                      isLocked ? 'Verifikasi kos terlebih dahulu untuk akses' : subtitle,
+                      style: TextStyle(
                         fontSize: 11,
-                        color: Color(0xFF64748B),
+                        color: isLocked ? const Color(0xFFB45309) : const Color(0xFF64748B),
+                        fontWeight: isLocked ? FontWeight.w500 : FontWeight.normal,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,

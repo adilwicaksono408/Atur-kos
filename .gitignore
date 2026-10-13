@@ -24,6 +24,9 @@ login-supabase-app/yarn-debug.log*
 login-supabase-app/yarn-error.log*
 
 # General / Environment
+.idea/
+**/.idea/
+*.iml
 .git_bak
 **/.git_bak
 .env
@@ -31,3 +34,4 @@ login-supabase-app/yarn-error.log*
 .DS_Store
 Thumbs.db
 *.log
+

@@ -1,18 +1,42 @@
-/// Definisi Peran Pengguna sesuai Dokumen PRD Modul 1 (RBAC)
 enum UserRole {
+  superAdmin,
   owner,
   tenant;
 
   static UserRole fromString(String? role) {
-    if (role != null && role.trim().toLowerCase() == 'owner') {
-      return UserRole.owner;
+    if (role != null) {
+      final clean = role.trim().toLowerCase();
+      if (clean == 'super_admin' || clean == 'superadmin') {
+        return UserRole.superAdmin;
+      }
+      if (clean == 'owner') {
+        return UserRole.owner;
+      }
     }
     return UserRole.tenant;
   }
 
-  String get value => this == UserRole.owner ? 'owner' : 'tenant';
+  String get value {
+    switch (this) {
+      case UserRole.superAdmin:
+        return 'super_admin';
+      case UserRole.owner:
+        return 'owner';
+      case UserRole.tenant:
+        return 'tenant';
+    }
+  }
 
-  String get label => this == UserRole.owner ? 'Pemilik Kos' : 'Penghuni Kos';
+  String get label {
+    switch (this) {
+      case UserRole.superAdmin:
+        return 'Super Admin';
+      case UserRole.owner:
+        return 'Pemilik Kos';
+      case UserRole.tenant:
+        return 'Penghuni Kos';
+    }
+  }
 }
 
 /// Model Profil Pengguna Atur Kos

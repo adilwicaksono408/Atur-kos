@@ -5,7 +5,9 @@
 
 BEGIN;
 
--- 1. Hapus Trigger & Function Auth
+-- 1. Hapus Trigger & Function
+DROP TRIGGER IF EXISTS trg_check_room_quota ON public.rooms;
+DROP FUNCTION IF EXISTS public.check_room_quota();
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 DROP FUNCTION IF EXISTS public.handle_new_user();
 
@@ -31,6 +33,8 @@ DROP INDEX IF EXISTS public.idx_profiles_kost_id;
 DROP INDEX IF EXISTS public.idx_profiles_role;
 
 -- 5. Hapus ENUM Types
+DROP TYPE IF EXISTS public.subscription_tier CASCADE;
+DROP TYPE IF EXISTS public.kost_status CASCADE;
 DROP TYPE IF EXISTS public.announcement_category CASCADE;
 DROP TYPE IF EXISTS public.cash_flow_type CASCADE;
 DROP TYPE IF EXISTS public.complaint_status CASCADE;

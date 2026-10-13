@@ -1,7 +1,7 @@
 -- ==============================================================================
--- Atur kos
--- Skrip DDL Migrasi Basis Data Supabase PostgreSQL (Full Schema)
--- Berdasarkan Dokumen PRD v1.0.0
+-- ATUR KOS - BASIS DATA SUPABASE POSTGRESQL (FULL SCHEMA v2.0.0)
+-- Fitur: Multi-Tenant SaaS, Super Admin, Midtrans Integration, Geolocation, Subscriptions
+-- Khusus: Auto-Assign Super Admin untuk wicaksonoadil768@gmail.com
 -- ==============================================================================
 
 BEGIN;
@@ -16,7 +16,13 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- -----------------------------------------------------------------------------
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
-        CREATE TYPE user_role AS ENUM ('owner', 'tenant');
+        CREATE TYPE user_role AS ENUM ('super_admin', 'owner', 'tenant');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'kost_status') THEN
+        CREATE TYPE kost_status AS ENUM ('pending_verification', 'active', 'rejected', 'suspended');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'subscription_tier') THEN
+        CREATE TYPE subscription_tier AS ENUM ('starter', 'juragan');
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'room_status') THEN
         CREATE TYPE room_status AS ENUM ('kosong', 'terisi', 'akan_kosong', 'perbaikan');
@@ -25,7 +31,7 @@ DO $$ BEGIN
         CREATE TYPE tenant_status AS ENUM ('aktif', 'akan_berakhir', 'keluar');
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'invoice_status') THEN
-        CREATE TYPE invoice_status AS ENUM ('belum_bayar', 'menunggu_verifikasi', 'lunas', 'ditolak');
+        CREATE TYPE invoice_status AS ENUM ('belum_bayar', 'menunggu_verifikasi', 'lunas', 'kedaluwarsa', 'batal');
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'complaint_scope') THEN
         CREATE TYPE complaint_scope AS ENUM ('kamar_pribadi', 'fasilitas_umum');
@@ -42,41 +48,58 @@ DO $$ BEGIN
 END $$;
 
 -- -----------------------------------------------------------------------------
--- 3. TABEL: kosts (Entitas Utama Properti Kos)
+-- 3. TABEL: kosts (Entitas Properti Kos Multi-Tenant)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.kosts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    nama_kost VARCHAR(100) NOT NULL DEFAULT 'Kos Princess',
-    alamat TEXT NOT NULL DEFAULT 'Jl. Kos Princess No. 1',
-    nomor_kontak VARCHAR(20) NOT NULL DEFAULT '628123456789',
+    nama_kost VARCHAR(100) NOT NULL,
+    alamat TEXT NOT NULL,
+    nomor_kontak VARCHAR(20) NOT NULL,
     rekening_bank VARCHAR(50),
     nama_pemilik_rekening VARCHAR(100),
+    
+    -- Geolocation Dual-Mode (GPS & Peta Manual)
+    latitude NUMERIC(10, 8),
+    longitude NUMERIC(11, 8),
+    google_maps_url TEXT,
+    
+    -- Verifikasi Fisik oleh Super Admin
+    foto_bangunan_url TEXT,
+    dokumen_ktp_url TEXT,
+    status_verifikasi kost_status NOT NULL DEFAULT 'pending_verification',
+    catatan_verifikasi_admin TEXT,
+    diverifikasi_pada TIMESTAMPTZ,
+    
+    -- Model Langganan 2-Tier
+    tier subscription_tier NOT NULL DEFAULT 'starter',
+    max_rooms INT NOT NULL DEFAULT 5,
+    subscription_expires_at TIMESTAMPTZ,
+    
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_kosts_status ON public.kosts(status_verifikasi);
+CREATE INDEX IF NOT EXISTS idx_kosts_lat_long ON public.kosts(latitude, longitude);
 
 -- -----------------------------------------------------------------------------
 -- 4. TABEL: profiles (Sinkronisasi dengan auth.users)
--- Memperkaya tabel profiles awal dari starter template Supabase
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-    full_name TEXT,
+    kost_id UUID REFERENCES public.kosts(id) ON DELETE RESTRICT,
+    full_name TEXT NOT NULL,
+    nomor_wa VARCHAR(20) UNIQUE,
+    role user_role NOT NULL DEFAULT 'tenant',
     avatar_url TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    fcm_token TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
-
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS kost_id UUID REFERENCES public.kosts(id) ON DELETE RESTRICT;
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS nomor_wa VARCHAR(20) UNIQUE;
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role user_role NOT NULL DEFAULT 'tenant';
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS fcm_token TEXT;
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
-
 CREATE INDEX IF NOT EXISTS idx_profiles_kost_id ON public.profiles(kost_id);
 CREATE INDEX IF NOT EXISTS idx_profiles_role ON public.profiles(role);
 
 -- -----------------------------------------------------------------------------
--- 5. TABEL: rooms (Inventaris Kamar & Fasilitas)
+-- 5. TABEL: rooms (Inventaris Kamar & Batas Kuota Paket)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.rooms (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -114,34 +137,43 @@ CREATE INDEX IF NOT EXISTS idx_tenants_user ON public.tenants(user_id);
 CREATE INDEX IF NOT EXISTS idx_tenants_room ON public.tenants(room_id);
 
 -- -----------------------------------------------------------------------------
--- 7. TABEL: invoices (Siklus Tagihan & Bukti Pembayaran Sewa)
+-- 7. TABEL: invoices (Siklus Tagihan, Midtrans Gateway & Kuitansi QR)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.invoices (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     kost_id UUID NOT NULL REFERENCES public.kosts(id) ON DELETE CASCADE,
     tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
-    nomor_invoice VARCHAR(50) NOT NULL UNIQUE,
-    periode VARCHAR(20) NOT NULL, -- Format 'YYYY-MM', misal '2026-10'
+    order_id VARCHAR(60) NOT NULL UNIQUE, -- Contoh: INV/202610/05/001
+    periode VARCHAR(20) NOT NULL, -- 'YYYY-MM'
     nominal NUMERIC(12, 2) NOT NULL,
     tanggal_jatuh_tempo DATE NOT NULL,
-    bukti_bayar_url TEXT,
-    tanggal_bayar TIMESTAMPTZ,
-    diverifikasi_pada TIMESTAMPTZ,
+    
+    -- Integrasi Midtrans Snap & Webhook
+    snap_token TEXT,
+    payment_type VARCHAR(50), -- 'qris', 'bank_transfer', 'gopay'
+    midtrans_transaction_id TEXT,
+    transaction_time TIMESTAMPTZ,
+    settlement_time TIMESTAMPTZ,
     status invoice_status NOT NULL DEFAULT 'belum_bayar',
-    catatan_penolakan TEXT,
+    
+    -- Kuitansi Sah Digital Anti-Manipulasi
+    qr_verification_code TEXT UNIQUE,
+    kuitansi_pdf_url TEXT,
+    
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_invoices_status_date ON public.invoices(kost_id, status, tanggal_jatuh_tempo);
+CREATE INDEX IF NOT EXISTS idx_invoices_order_id ON public.invoices(order_id);
 CREATE INDEX IF NOT EXISTS idx_invoices_tenant ON public.invoices(tenant_id);
 
 -- -----------------------------------------------------------------------------
--- 8. TABEL: notification_logs (Log Pengiriman Notifikasi WhatsApp H-3, Hari H, H+2)
+-- 8. TABEL: notification_logs (Log WhatsApp Reminder Anti-Banned)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.notification_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     invoice_id UUID NOT NULL REFERENCES public.invoices(id) ON DELETE CASCADE,
-    tipe_reminder VARCHAR(20) NOT NULL, -- 'H-3', 'Hari-H', 'H+2'
+    tipe_reminder VARCHAR(20) NOT NULL, -- 'H-3', 'Hari-H', 'H+2', 'Kuitansi'
     nomor_tujuan VARCHAR(20) NOT NULL,
     status_kirim VARCHAR(20) NOT NULL, -- 'sent', 'failed'
     response_payload JSONB,
@@ -150,7 +182,7 @@ CREATE TABLE IF NOT EXISTS public.notification_logs (
 CREATE UNIQUE INDEX IF NOT EXISTS uq_invoice_reminder ON public.notification_logs(invoice_id, tipe_reminder);
 
 -- -----------------------------------------------------------------------------
--- 9. TABEL: complaints (Tiket Keluhan Kerusakan Kamar & Fasilitas Umum)
+-- 9. TABEL: complaints (Tiket Keluhan Kerusakan Fasilitas)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.complaints (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -170,7 +202,7 @@ CREATE INDEX IF NOT EXISTS idx_complaints_kost_status ON public.complaints(kost_
 CREATE INDEX IF NOT EXISTS idx_complaints_tenant ON public.complaints(tenant_id);
 
 -- -----------------------------------------------------------------------------
--- 10. TABEL: cash_ledgers (Buku Kas Masuk & Kas Keluar Sederhana)
+-- 10. TABEL: cash_ledgers (Buku Kas Masuk Otomatis & Kas Keluar Manual)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.cash_ledgers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -187,19 +219,19 @@ CREATE TABLE IF NOT EXISTS public.cash_ledgers (
 CREATE INDEX IF NOT EXISTS idx_cash_ledgers_date ON public.cash_ledgers(kost_id, tanggal);
 
 -- -----------------------------------------------------------------------------
--- 11. TABEL: announcements (Papan Pengumuman, Paket Kurir & Lost-and-Found)
+-- 11. TABEL: announcements (Papan Pengumuman & Paket Kurir FCM)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.announcements (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     kost_id UUID NOT NULL REFERENCES public.kosts(id) ON DELETE CASCADE,
     author_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    target_room_id UUID REFERENCES public.rooms(id) ON DELETE SET NULL, -- NULL jika broadcast untuk seluruh penghuni
+    target_room_id UUID REFERENCES public.rooms(id) ON DELETE SET NULL, -- NULL jika disiarkan ke seluruh kos
     kategori announcement_category NOT NULL DEFAULT 'paket',
     judul VARCHAR(150) NOT NULL,
     deskripsi TEXT NOT NULL,
     foto_urls TEXT[] DEFAULT '{}',
     is_pinned BOOLEAN DEFAULT FALSE,
-    is_resolved BOOLEAN DEFAULT FALSE, -- Ditandai TRUE jika paket/barang sudah diambil
+    is_resolved BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -207,29 +239,60 @@ CREATE INDEX IF NOT EXISTS idx_announcements_kost ON public.announcements(kost_i
 CREATE INDEX IF NOT EXISTS idx_announcements_target_room ON public.announcements(target_room_id);
 
 -- -----------------------------------------------------------------------------
--- 12. TRIGGER SINKRONISASI USER BARU DARI auth.users KE public.profiles
+-- 12. TRIGGER OTOMATIS: SINKRONISASI USER BARU & PENETAPAN SUPER ADMIN
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS trigger AS $$
+RETURNS trigger 
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
 DECLARE
-    default_kost_id UUID;
+    assigned_role public.user_role;
+    target_kost_id UUID;
 BEGIN
-    SELECT id INTO default_kost_id FROM public.kosts LIMIT 1;
-    INSERT INTO public.profiles (id, full_name, avatar_url, role, kost_id)
+    -- ATURAN KHUSUS: Jika email adalah wicaksonoadil768@gmail.com, otomatis jadikan super_admin
+    IF LOWER(new.email) = 'wicaksonoadil768@gmail.com' THEN
+        assigned_role := 'super_admin'::public.user_role;
+        target_kost_id := NULL;
+    ELSE
+        assigned_role := COALESCE((new.raw_user_meta_data->>'role')::public.user_role, 'tenant'::public.user_role);
+        SELECT id INTO target_kost_id FROM public.kosts ORDER BY created_at ASC LIMIT 1;
+    END IF;
+
+    INSERT INTO public.profiles (id, full_name, avatar_url, role, kost_id, updated_at)
     VALUES (
         new.id,
-        COALESCE(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name', new.email),
+        COALESCE(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
         new.raw_user_meta_data->>'avatar_url',
-        COALESCE((new.raw_user_meta_data->>'role')::user_role, 'tenant'::user_role),
-        default_kost_id
+        assigned_role,
+        target_kost_id,
+        NOW()
     )
     ON CONFLICT (id) DO UPDATE SET
         full_name = EXCLUDED.full_name,
         avatar_url = EXCLUDED.avatar_url,
+        role = assigned_role,
+        kost_id = COALESCE(EXCLUDED.kost_id, profiles.kost_id),
         updated_at = NOW();
+
+    RETURN new;
+
+EXCEPTION WHEN OTHERS THEN
+    -- PENGAMAN: Jika ada anomali, jangan batalkan pembuatan akun di auth.users!
+    RAISE WARNING 'handle_new_user error: %', SQLERRM;
+    INSERT INTO public.profiles (id, full_name, role, updated_at)
+    VALUES (
+        new.id,
+        COALESCE(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
+        CASE WHEN LOWER(new.email) = 'wicaksonoadil768@gmail.com' THEN 'super_admin'::public.user_role ELSE 'tenant'::public.user_role END,
+        NOW()
+    )
+    ON CONFLICT (id) DO NOTHING;
+
     RETURN new;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
@@ -237,10 +300,17 @@ CREATE TRIGGER on_auth_user_created
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- -----------------------------------------------------------------------------
--- 13. DATA SEEDING AWAL (Entitas Default Kos Princess)
+-- 13. SEEDING / PENETAPAN SUPER ADMIN JIKA AKUN SUDAH PERNAH MENDAFTAR
 -- -----------------------------------------------------------------------------
-INSERT INTO public.kosts (nama_kost, alamat, nomor_kontak, rekening_bank, nama_pemilik_rekening)
-SELECT 'Kos Princess', 'Jl. Kos Princess No. 1, Yogyakarta', '628123456789', 'BCA 1234567890', 'Ibu Rina'
+UPDATE public.profiles
+SET role = 'super_admin'
+WHERE id IN (
+    SELECT id FROM auth.users WHERE LOWER(email) = 'wicaksonoadil768@gmail.com'
+);
+
+-- Buat kos awal terverifikasi untuk pengujian jika tabel kosts kosong
+INSERT INTO public.kosts (nama_kost, alamat, nomor_kontak, rekening_bank, nama_pemilik_rekening, status_verifikasi, tier, max_rooms)
+SELECT 'Kos Princess', 'Jl. Kaliurang KM 5, Sleman, D.I. Yogyakarta', '628123456789', 'BCA 1234567890', 'Ibu Rina', 'active', 'juragan', 25
 WHERE NOT EXISTS (SELECT 1 FROM public.kosts WHERE nama_kost = 'Kos Princess');
 
 COMMIT;

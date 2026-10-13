@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:atur_kos/models/kost_model.dart';
 import 'package:atur_kos/services/kos_service.dart';
 
 /// Halaman Manajemen Inventaris Kamar Kos (CRUD Kamar)
@@ -19,6 +20,7 @@ class RoomManagementScreen extends StatefulWidget {
 
 class _RoomManagementScreenState extends State<RoomManagementScreen> {
   List<Map<String, dynamic>> _rooms = [];
+  KostModel? _kostModel;
   bool _isLoading = true;
   String _selectedFilter = 'semua'; // 'semua', 'kosong', 'terisi', 'perbaikan'
 
@@ -30,10 +32,14 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
 
   Future<void> _loadRooms() async {
     setState(() => _isLoading = true);
-    final data = await KosService.getRooms(widget.kostId);
+    final results = await Future.wait([
+      KosService.getRooms(widget.kostId),
+      KosService.getKostModel(widget.kostId),
+    ]);
     if (mounted) {
       setState(() {
-        _rooms = data;
+        _rooms = results[0] as List<Map<String, dynamic>>;
+        _kostModel = results[1] as KostModel?;
         _isLoading = false;
       });
     }
@@ -44,8 +50,233 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
     return _rooms.where((r) => (r['status'] ?? 'kosong') == _selectedFilter).toList();
   }
 
+  // Dialog Upgrade Paket Juragan (PRD v2.0.0 Modul 3 & 10)
+  void _showUpgradeDialog() {
+    int selectedDuration = 12; // 1 = bulanan, 12 = tahunan (default rekomendasi)
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.star_rounded, color: Color(0xFF2563EB), size: 24),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Upgrade ke Paket Juragan',
+                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        'Buka kuota hingga 25 kamar & fitur otomasi penuh',
+                        style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF3C7),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFFCD34D)),
+                    ),
+                    child: Text(
+                      'Batas kuota Paket Starter (${_kostModel?.maxRooms ?? 5} kamar) telah tercapai. Tingkatkan paket untuk mengelola lebih banyak kamar.',
+                      style: TextStyle(fontSize: 12, color: Colors.amber.shade900),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Fitur Paket Juragan
+                  const Text('Keuntungan Paket Juragan:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  const SizedBox(height: 8),
+                  _buildFeatureRow('Kuota kamar terbuka hingga 25 kamar'),
+                  _buildFeatureRow('Pengingat WhatsApp Otomatis (Protokol Anti-Ban)'),
+                  _buildFeatureRow('AI Marketing Poster Generator (Format 1:1 & 9:16)'),
+                  _buildFeatureRow('Deteksi Mitigasi Kamar Kosong H-30'),
+                  _buildFeatureRow('Papan Pengumuman & Notifikasi Paket Kurir (FCM)'),
+                  const SizedBox(height: 14),
+
+                  // Opsi Durasi Langganan
+                  const Text('Pilih Siklus Langganan:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  const SizedBox(height: 8),
+                  InkWell(
+                    onTap: () => setDialogState(() => selectedDuration = 1),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: selectedDuration == 1 ? const Color(0xFFEFF6FF) : Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: selectedDuration == 1 ? const Color(0xFF2563EB) : const Color(0xFFCBD5E1),
+                          width: selectedDuration == 1 ? 2 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            selectedDuration == 1 ? Icons.radio_button_checked : Icons.radio_button_off,
+                            color: const Color(0xFF2563EB),
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Paket Bulanan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                Text('Rp 50.000 / bulan', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  InkWell(
+                    onTap: () => setDialogState(() => selectedDuration = 12),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: selectedDuration == 12 ? const Color(0xFFEFF6FF) : Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: selectedDuration == 12 ? const Color(0xFF2563EB) : const Color(0xFFCBD5E1),
+                          width: selectedDuration == 12 ? 2 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            selectedDuration == 12 ? Icons.radio_button_checked : Icons.radio_button_off,
+                            color: const Color(0xFF2563EB),
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text('Paket Tahunan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                    SizedBox(width: 6),
+                                    Text('🎉 HEMAT 2 BULAN',
+                                        style: TextStyle(
+                                            color: Color(0xFF16A34A), fontSize: 10, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                                Text('Rp 500.000 / tahun (Bayar 10 bulan dapat 12 bulan)',
+                                    style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Nanti Saja', style: TextStyle(color: Color(0xFF64748B))),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  final messenger = ScaffoldMessenger.of(context);
+                  final kostId = widget.kostId;
+                  if (kostId == null || kostId.isEmpty) return;
+
+                  final success = await KosService.upgradeKostSubscription(
+                    kostId: kostId,
+                    tier: SubscriptionTier.juragan,
+                    months: selectedDuration,
+                  );
+
+                  if (mounted) {
+                    if (success) {
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text('🎉 Selamat! Kos Anda berhasil di-upgrade ke Paket Juragan! Kuota 25 kamar aktif.'),
+                          backgroundColor: Color(0xFF16A34A),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                      _loadRooms();
+                    } else {
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text('Gagal melakukan upgrade paket. Coba lagi nanti.'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2563EB),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+                child: const Text('Aktifkan Paket Juragan', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildFeatureRow(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(text, style: const TextStyle(fontSize: 12, color: Color(0xFF334155))),
+          ),
+        ],
+      ),
+    );
+  }
+
   // Dialog Tambah Kamar Baru
   void _showAddRoomDialog() {
+    // Validasi kuota paket sebelum membuka form (PRD v2.0.0 Modul 3)
+    final maxRooms = _kostModel?.maxRooms ?? 5;
+    if (_rooms.length >= maxRooms) {
+      _showUpgradeDialog();
+      return;
+    }
+
     final formKey = GlobalKey<FormState>();
     final nomorController = TextEditingController();
     final hargaController = TextEditingController(text: '1500000');
@@ -371,6 +602,81 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
       ),
       body: Column(
         children: [
+          // Kuota & Tier Banner (PRD v2.0.0 2-Tier Pricing)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            color: const Color(0xFFF1F5F9),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: _kostModel?.isJuragan == true ? const Color(0xFFDBEAFE) : Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    _kostModel?.isJuragan == true ? Icons.star_rounded : Icons.inventory_2_outlined,
+                    color: _kostModel?.isJuragan == true ? const Color(0xFF2563EB) : const Color(0xFF64748B),
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            _kostModel?.tier.label ?? 'Paket Starter',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '(${_rooms.length} / ${_kostModel?.maxRooms ?? 5} Kamar)',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: _rooms.length >= (_kostModel?.maxRooms ?? 5) ? Colors.red.shade700 : const Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: (_kostModel?.maxRooms ?? 5) > 0
+                              ? (_rooms.length / (_kostModel?.maxRooms ?? 5)).clamp(0.0, 1.0)
+                              : 0.0,
+                          backgroundColor: const Color(0xFFCBD5E1),
+                          color: _rooms.length >= (_kostModel?.maxRooms ?? 5)
+                              ? Colors.red.shade600
+                              : const Color(0xFF2563EB),
+                          minHeight: 6,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (_kostModel?.isStarter == true) ...[
+                  const SizedBox(width: 12),
+                  ElevatedButton(
+                    onPressed: _showUpgradeDialog,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2563EB),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    child: const Text('Upgrade', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ],
+            ),
+          ),
+
           // Filter Status Kamar
           Container(
             color: Colors.white,

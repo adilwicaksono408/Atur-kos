@@ -1,68 +1,68 @@
-# Matriks Kemajuan Project: Aplikasi Kos Princess
+# Matriks Kemajuan Project: Platform SaaS Multi-Tenant Atur Kos
 
-**Nama Aplikasi:** Sistem Manajemen Operasional & Otomasi Kos Princess  
-**Tech Stack:** Next.js (App Router), Supabase (PostgreSQL, Auth, Storage), Tailwind CSS, WhatsApp Gateway  
-**Dokumen Acuan:** [PRD.md](file:///d:/Kos%20Princess/PRD.md)
+**Nama Aplikasi:** Atur Kos (Platform Operasional, Otomasi & SaaS Multi-Tenant Manajemen Kos)  
+**Tech Stack:** Flutter, Supabase (PostgreSQL 15+, Auth, Storage, RLS), Midtrans Snap & Webhook  
+**Dokumen Acuan:** [PRD_v2.md](file:///d:/Atur%20kos/PRD_v2.md) & [supabase_migration_v2.sql](file:///d:/Atur%20kos/supabase_migration_v2.sql)
 
 ---
 
-## 📊 Ringkasan Status Keseluruhan
+## 📊 Ringkasan Status Keseluruhan (PRD v2.0.0)
 
 | Modul | Status | Persentase | Terakhir Diperbarui |
 | :--- | :---: | :---: | :---: |
-| **Fondasi & Basis Data (Supabase & RLS)** | Selesai | 100% | 6 Oktober 2026 |
-| **Modul 1: Autentikasi & RBAC** | Selesai | 100% | 6 Oktober 2026 |
-| **Modul 2: Inventaris & Alokasi Kamar** | Selesai | 100% | 6 Oktober 2026 |
-| **Modul 3: Finansial & Tagihan Sewa** | In Progress | 50% | 6 Oktober 2026 |
-| **Modul 4: Tiket Keluhan & Perbaikan** | Belum Mulai | 0% | - |
-| **Modul 5: Mitigasi Kamar Kosong & Poster AI** | In Progress | 40% | 6 Oktober 2026 |
-| **Pengujian Sistem (Testing & UAT)** | In Progress | 40% | 6 Oktober 2026 |
+| **Fondasi Database & Migrasi v2.0.0** | Selesai | 100% | 11 Oktober 2026 |
+| **Modul 1: Autentikasi, Multi-Tenancy & RBAC (3 Role)** | Selesai | 100% | 11 Oktober 2026 |
+| **Modul 2: Super Admin Portal & Verifikasi Properti** | Selesai | 100% | 11 Oktober 2026 |
+| **Modul 3: Manajemen Kamar & Kuota Freemium 2-Tier** | Selesai | 100% | 11 Oktober 2026 |
+| **Modul 4: Smart Billing, Midtrans Gateway & Kuitansi QR** | In Progress | 50% | 11 Oktober 2026 |
+| **Modul 5: WhatsApp Notification Engine (Anti-Ban)** | Menunggu | 0% | - |
+| **Modul 6: Helpdesk Kerusakan Fasilitas** | Menunggu | 0% | - |
+| **Modul 7: Mitigasi H-30 & Poster AI Marketing** | In Progress | 40% | 11 Oktober 2026 |
+| **Modul 8: Pembukuan Arus Kas (Cash Ledger)** | In Progress | 40% | 11 Oktober 2026 |
+| **Modul 9: Papan Pengumuman & Paket Kurir (FCM)** | Menunggu | 0% | - |
 
 ---
 
 ## 🛠️ Rincian Status per Modul
 
-### 0. Fondasi & Basis Data (Supabase & RLS)
-- [x] Inisialisasi Proyek Flutter (`atur_kos`) & konfigurasi Supabase SDK
-- [x] DDL Skrip SQL Pembuatan Tabel:
-  - [x] Tabel `profiles` (Sinkronisasi `auth.users` dengan role `owner` & `tenant`)
-  - [x] Tabel `rooms` (Nomor kamar, tipe, harga, fasilitas, status)
-  - [x] Tabel `tenants` (Relasi user dengan kamar, tanggal sewa, siklus bayar)
-  - [x] Tabel `invoices` (Nomor invoice, periode, nominal, bukti bayar, status)
-  - [x] Tabel `complaints` (Kategori kamar pribadi/umum, deskripsi, foto, status)
-- [x] Arsitektur Keamanan Ketat Row Level Security (RLS) (`supabase_secure_rbac_policies.sql`)
-- [x] Skrip Sinkronisasi Nama Calon Penghuni (`supabase_sync_candidate_names.sql`)
+### 0. Fondasi Database & Migrasi v2.0.0
+- [x] Migrasi non-destruktif `supabase_migration_v2.sql`
+- [x] Enum baru: `user_role` (`super_admin`), `kost_status`, `subscription_tier`, `invoice_status` (`kedaluwarsa`, `batal`)
+- [x] Trigger PostgreSQL `trg_check_room_quota` untuk pembatasan kuota kamar otomatis
 
-### 1. Modul 1: Autentikasi, Profil & RBAC (100% Selesai)
-- [x] Halaman Registrasi & Login Email/Password (`login_screen.dart`, `register_screen.dart`)
-- [x] Integrasi Login dengan Google OAuth
-- [x] Fitur Lupa Kata Sandi / Reset Password (`forgot_password_screen.dart`, `reset_password_screen.dart`)
-- [x] Konfirmasi Email Registrasi & Penanganan Email Confirmation
-- [x] Kepatuhan RBAC Murni: Penghapusan toggle role manual & pembersihan data dummy
-- [x] Personalisasi UI dinamis ("Halo, [Nama Pengguna]") di Dasbor Pemilik & Penghuni
-- [x] Perbaikan error layout web (`RenderFlex overflowed`) & backend HTTP 500
+### 1. Modul 1: Autentikasi, Multi-Tenancy & RBAC 3 Tingkatan (100% Selesai)
+- [x] Enum `UserRole` (`superAdmin`, `owner`, `tenant`) di [user_profile.dart](file:///d:/Atur%20kos/atur_kos/lib/models/user_profile.dart)
+- [x] Rute terpusat dinamis berbasis peran di [main.dart](file:///d:/Atur%20kos/atur_kos/lib/main.dart)
+- [x] Reset password, konfirmasi email, Google OAuth
 
-### 2. Modul 2: Inventaris & Alokasi Kamar (100% Selesai)
-- [x] Dasbor Pemilik (Owner Overview)
-- [x] Kode Undangan Properti Kos Dinamis (Salin clipboard & bagikan ke WhatsApp)
-- [x] Alur Masuk Calon Penghuni via Kode Undangan (`joinKosByInvitationCode`)
-- [x] Layar Alokasi Kamar Pemilik (`tenant_allocation_screen.dart`): Calon penghuni menunggu alokasi
-- [x] Pemilihan kamar kosong, penentuan harga sewa kesepakatan, dan siklus jatuh tempo
-- [x] Otomasi penerbitan tagihan pertama saat kamar berhasil dialokasikan
+### 2. Modul 2: Onboarding Properti, Dual-Mode Geolocation & Verifikasi Super Admin (100% Selesai)
+- [x] Dasbor terdedikasi Super Admin di [super_admin_dashboard_screen.dart](file:///d:/Atur%20kos/atur_kos/lib/screens/admin/super_admin_dashboard_screen.dart)
+- [x] Validasi fisik bangunan, dokumen KTP, dan koordinat maps
+- [x] Aksi Setujui (*Approve*), Tolak (*Reject*), dan Bekukan (*Suspend*)
+- [x] Banner status verifikasi dinamis pada dasbor pemilik
+- [x] Dual-Mode Location Picker di [kos_settings_screen.dart](file:///d:/Atur%20kos/atur_kos/lib/screens/owner/kos_settings_screen.dart):
+  - [x] Opsi A: Deteksi GPS 1-klik otomatis via `geolocator`
+  - [x] Opsi B: Koordinat manual & tombol verifikasi Google Maps via `url_launcher`
+  - [x] Penanganan fallback saat izin GPS ditolak
+- [x] Upload & pratinjau berkas KTP pemilik dan foto fisik tampak depan kos
 
-### 3. Modul 3: Finansial & Tagihan Sewa (50% Berjalan)
-- [x] Penerbitan Tagihan Otomatis Perdana saat alokasi kamar tersimpan
-- [x] Logika operasional kas & KPI keuangan di `kos_service.dart`
-- [ ] Formulir Unggah Bukti Transfer Pembayaran di sisi Penghuni (US-3.2)
-- [ ] Menu Verifikasi Pembayaran Masuk (Terima / Tolak) oleh Pemilik (US-3.3)
-- [ ] Otomasi Pengingat Jatuh Tempo WhatsApp (US-3.4)
+### 3. Modul 3: Manajemen Kamar & Kuota Freemium 2-Tier (100% Selesai)
+- [x] Kartu kuota & progress bar kamar di [room_management_screen.dart](file:///d:/Atur%20kos/atur_kos/lib/screens/owner/room_management_screen.dart)
+- [x] Interseptor kuota kamar: Paket Starter (maks 5 kamar) vs Juragan (s/d 25 kamar)
+- [x] Dialog Upgrade Paket Juragan (Opsi Bulanan Rp 50rb vs Tahunan Rp 500rb)
+- [x] Logika alokasi kamar & kode undangan kos dinamis
 
-### 4. Modul 4: Helpdesk & Tiket Keluhan Fasilitas (Menunggu)
-- [ ] Form Pengajuan Komplain oleh Penghuni (Kamar Pribadi / Fasilitas Umum + Foto)
-- [ ] Dasbor Pelacakan Status Keluhan Penghuni (`Diajukan` $\rightarrow$ `Sedang Dikerjakan` $\rightarrow$ `Selesai`)
-- [ ] Dasbor Manajemen Komplain untuk Pemilik (Update status & catatan perbaikan)
+### 4. Modul 4: Smart Billing, Midtrans Gateway & Kuitansi QR (50% Berjalan)
+- [x] Penerbitan invoice otomatis perdana dengan order_id unik
+- [ ] Integrasi Midtrans Snap (QRIS & Virtual Account)
+- [ ] Penerbitan Kuitansi Sah Digital ber-QR Code anti-manipulasi
+- [ ] Sinkronisasi otomatis ke `cash_ledgers` saat lunas
 
-### 5. Modul 5: Mitigasi Kamar Kosong H-30 & Poster AI (40% Berjalan)
-- [x] Generator Poster Promosi Kamar Kosong (`room_poster_generator_screen.dart`)
-- [ ] Formulir Komitmen Perpanjangan Sewa H-30 di akun penghuni
-- [ ] Papan Pengumuman Digital Kos & Ekspor Laporan Keuangan (US-5.1 & US-5.5)
+### 5. Modul 5-9: Otomasi Lanjutan (Dalam Antrean Sprint)
+- [ ] Modul 5: WhatsApp Reminder Berjenjang (Anti-Ban Jitter 5-10s)
+- [ ] Modul 6: Tiket Keluhan Kerusakan (Kamar Pribadi & Umum + Multi-Foto)
+- [x] Modul 7: Generator Poster Kamar Kosong AI (1:1 & 9:16)
+- [ ] Modul 7: Deteksi Sisa Sewa 30 Hari (Mitigasi H-30)
+- [ ] Modul 8: Ekspor Rekap Buku Kas (Excel / PDF)
+- [ ] Modul 9: Pengumuman Paket Kurir Tiba Terarah via FCM
+

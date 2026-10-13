@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:atur_kos/models/kost_model.dart';
 
 /// Model Data Ringkasan Operasional Properti (KPI PRD Kos Princess)
 class OperationalSummary {
@@ -61,7 +62,110 @@ class KosService {
     }
   }
 
-  /// Memperbarui informasi profil properti kos & rekening pembayaran
+  /// Memastikan pemilik kos terhubung dengan entitas kos miliknya sendiri
+  /// yang didaftarkan saat registrasi (bukan Kos Princess default).
+  static Future<String?> ensureOwnerKosProfile({
+    required String userId,
+    required Map<String, dynamic>? userMetadata,
+    String? currentKostId,
+  }) async {
+    try {
+      final metaNamaKos = userMetadata?['nama_kost']?.toString().trim();
+      final metaAlamatKos = userMetadata?['alamat_kost']?.toString().trim();
+      final metaNomorWa = userMetadata?['nomor_wa']?.toString().trim();
+
+      // Jika tidak ada metadata pendaftaran kos, pertahankan currentKostId
+      if (metaNamaKos == null || metaNamaKos.isEmpty) {
+        return currentKostId;
+      }
+
+      // Periksa apakah kos saat ini sudah merupakan kos milik sendiri
+      if (currentKostId != null && currentKostId.isNotEmpty) {
+        final currentKos = await _client
+            .from('kosts')
+            .select('id, nama_kost, alamat, created_at')
+            .eq('id', currentKostId)
+            .maybeSingle();
+
+        if (currentKos != null) {
+          final dbNama = currentKos['nama_kost']?.toString().trim() ?? '';
+          // Jika nama kos di DB sudah sesuai atau bukan Kos Princess, maka sudah benar
+          if (dbNama.toLowerCase() == metaNamaKos.toLowerCase() ||
+              (dbNama.toLowerCase() != 'kos princess' && metaNamaKos.toLowerCase() != 'kos princess')) {
+            return currentKostId;
+          }
+        }
+      }
+
+      // Buat kode undangan default dari nama kos baru (misal MAWAR123)
+      String cleanName = metaNamaKos.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toUpperCase();
+      if (cleanName.length > 6) {
+        cleanName = cleanName.substring(0, 6);
+      }
+      if (cleanName.isEmpty) cleanName = 'KOS';
+
+      // Pastikan kode unik
+      String generatedKode = cleanName;
+      final isAvailable = await isKodeKostAvailable(generatedKode);
+      if (!isAvailable) {
+        final randomNum = (100 + (DateTime.now().millisecondsSinceEpoch % 900)).toString();
+        generatedKode = '$cleanName$randomNum';
+      }
+
+      // Masukkan properti kos baru untuk pemilik ini
+      final insertData = await _client.from('kosts').insert({
+        'nama_kost': metaNamaKos,
+        'alamat': (metaAlamatKos != null && metaAlamatKos.isNotEmpty) ? metaAlamatKos : 'Alamat belum diatur',
+        'nomor_kontak': (metaNomorWa != null && metaNomorWa.isNotEmpty) ? metaNomorWa : '081234567890',
+        'kode_kost': generatedKode,
+        'status_verifikasi': 'pending_verification',
+        'tier': 'starter',
+        'max_rooms': 5,
+      }).select('id').single();
+
+      final newKostId = insertData['id']?.toString();
+      if (newKostId != null && newKostId.isNotEmpty) {
+        // Update profil pemilik agar mengarah ke kos barunya
+        await _client
+            .from('profiles')
+            .update({
+              'kost_id': newKostId,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', userId);
+        return newKostId;
+      }
+      return currentKostId;
+    } catch (e) {
+      debugPrint('ensureOwnerKosProfile exception: $e');
+      return currentKostId;
+    }
+  }
+
+  /// Mengecek apakah kode undangan kos masih tersedia (belum digunakan oleh kos lain)
+  static Future<bool> isKodeKostAvailable(String kodeKost, {String? currentKostId}) async {
+    try {
+      final cleanCode = kodeKost.trim().toUpperCase();
+      if (cleanCode.isEmpty) return false;
+
+      var query = _client
+          .from('kosts')
+          .select('id')
+          .ilike('kode_kost', cleanCode);
+
+      if (currentKostId != null && currentKostId.isNotEmpty) {
+        query = query.neq('id', currentKostId);
+      }
+
+      final existing = await query.maybeSingle();
+      return existing == null;
+    } catch (e) {
+      debugPrint('Error isKodeKostAvailable: $e');
+      return true;
+    }
+  }
+
+  /// Memperbarui informasi profil properti kos, geolokasi & dokumen verifikasi (PRD v2.0.0 Modul 2)
   static Future<bool> updateKosProfile({
     required String kostId,
     required String namaKost,
@@ -70,23 +174,47 @@ class KosService {
     String? rekeningBank,
     String? namaPemilikRekening,
     String? kodeKost,
+    double? latitude,
+    double? longitude,
+    String? googleMapsUrl,
+    String? fotoBangunanUrl,
+    String? dokumenKtpUrl,
+    String? statusVerifikasi,
   }) async {
     try {
+      // 1. Validasi keunikan kode undangan jika diisi / diubah
+      if (kodeKost != null && kodeKost.trim().isNotEmpty) {
+        final cleanCode = kodeKost.trim().toUpperCase();
+        final available = await isKodeKostAvailable(cleanCode, currentKostId: kostId);
+        if (!available) {
+          throw Exception('DUPLICATE_KODE_KOST');
+        }
+      }
+
       final Map<String, dynamic> updateData = {
         'nama_kost': namaKost,
         'alamat': alamat,
         'nomor_kontak': nomorKontak,
         'rekening_bank': rekeningBank,
         'nama_pemilik_rekening': namaPemilikRekening,
+        'latitude': latitude,
+        'longitude': longitude,
+        'google_maps_url': googleMapsUrl,
+        'foto_bangunan_url': fotoBangunanUrl,
+        'dokumen_ktp_url': dokumenKtpUrl,
         'updated_at': DateTime.now().toIso8601String(),
       };
+      if (statusVerifikasi != null && statusVerifikasi.isNotEmpty) {
+        updateData['status_verifikasi'] = statusVerifikasi;
+      }
       if (kodeKost != null && kodeKost.trim().isNotEmpty) {
         updateData['kode_kost'] = kodeKost.trim().toUpperCase();
       }
       await _client.from('kosts').update(updateData).eq('id', kostId);
       return true;
     } catch (e) {
-      return false;
+      debugPrint('Error updateKosProfile: $e');
+      rethrow;
     }
   }
 
@@ -897,6 +1025,74 @@ class KosService {
       return data;
     } catch (e) {
       return null;
+    }
+  }
+
+  // ===========================================================================
+  // 10. SUPER ADMIN PORTAL & VERIFIKASI PROPERTI (PRD v2.0.0 MODUL 1 & 2)
+  // ===========================================================================
+
+  /// Mengambil data properti sebagai objek KostModel yang terstruktur
+  static Future<KostModel?> getKostModel(String? kostId) async {
+    final raw = await getKosProfile(kostId);
+    if (raw == null) return null;
+    return KostModel.fromMap(raw);
+  }
+
+  /// Mengambil daftar seluruh properti kos untuk Super Admin dengan filter status opsional
+  static Future<List<KostModel>> getAllKostsForAdmin({String? statusFilter}) async {
+    try {
+      var query = _client.from('kosts').select();
+      if (statusFilter != null && statusFilter.isNotEmpty && statusFilter != 'all') {
+        query = query.eq('status_verifikasi', statusFilter);
+      }
+      final data = await query.order('created_at', ascending: false);
+      return (data as List).map((item) => KostModel.fromMap(item)).toList();
+    } catch (e) {
+      debugPrint('Error getAllKostsForAdmin: $e');
+      return [];
+    }
+  }
+
+  /// Memperbarui status verifikasi kos oleh Super Admin (Approve / Reject / Suspend)
+  static Future<bool> verifyKostByAdmin({
+    required String kostId,
+    required KostStatus status,
+    String? catatanAdmin,
+  }) async {
+    try {
+      final updateData = <String, dynamic>{
+        'status_verifikasi': status.value,
+        'catatan_verifikasi_admin': catatanAdmin,
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+      await _client.from('kosts').update(updateData).eq('id', kostId);
+      return true;
+    } catch (e) {
+      debugPrint('Error verifyKostByAdmin: $e');
+      return false;
+    }
+  }
+
+  /// Memperbarui paket langganan kos ke Paket Juragan (PRD v2.0.0 Modul 3 & 10)
+  static Future<bool> upgradeKostSubscription({
+    required String kostId,
+    required SubscriptionTier tier,
+    int months = 1,
+  }) async {
+    try {
+      final now = DateTime.now();
+      final expiresAt = now.add(Duration(days: months * 30));
+      await _client.from('kosts').update({
+        'tier': tier.value,
+        'max_rooms': tier.defaultMaxRooms,
+        'subscription_expires_at': expiresAt.toIso8601String(),
+        'updated_at': now.toIso8601String(),
+      }).eq('id', kostId);
+      return true;
+    } catch (e) {
+      debugPrint('Error upgradeKostSubscription: $e');
+      return false;
     }
   }
 }
