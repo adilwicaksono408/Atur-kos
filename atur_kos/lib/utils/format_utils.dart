@@ -16,6 +16,9 @@ class FormatUtils {
     return '${isNegative ? "-Rp " : "Rp "}${buffer.toString()}';
   }
 
+  /// Alias formatRupiah untuk kemudahan pemanggilan
+  static String formatRupiah(num? amount) => rupiah(amount);
+
   /// Format angka ringkas untuk kartu KPI, misal: 1500000 -> "Rp 1,5 Jt"
   static String compactRupiah(num? amount) {
     if (amount == null || amount == 0) return 'Rp 0';

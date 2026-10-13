@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:atur_kos/models/kost_model.dart';
 import 'package:atur_kos/services/kos_service.dart';
+import 'package:atur_kos/screens/payment/midtrans_snap_payment_dialog.dart';
 
 /// Halaman Manajemen Inventaris Kamar Kos (CRUD Kamar)
 /// Pemilik dapat menambah kamar baru secara manual atau menggunakan template preset default.
@@ -204,50 +206,122 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
                 onPressed: () => Navigator.pop(ctx),
                 child: const Text('Nanti Saja', style: TextStyle(color: Color(0xFF64748B))),
               ),
-              ElevatedButton(
-                onPressed: () async {
+              OutlinedButton.icon(
+                onPressed: () {
                   Navigator.pop(ctx);
-                  final messenger = ScaffoldMessenger.of(context);
-                  final kostId = widget.kostId;
-                  if (kostId == null || kostId.isEmpty) return;
-
-                  final success = await KosService.upgradeKostSubscription(
-                    kostId: kostId,
-                    tier: SubscriptionTier.juragan,
-                    months: selectedDuration,
-                  );
-
-                  if (mounted) {
-                    if (success) {
-                      messenger.showSnackBar(
-                        const SnackBar(
-                          content: Text('🎉 Selamat! Kos Anda berhasil di-upgrade ke Paket Juragan! Kuota 25 kamar aktif.'),
-                          backgroundColor: Color(0xFF16A34A),
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
-                      _loadRooms();
-                    } else {
-                      messenger.showSnackBar(
-                        const SnackBar(
-                          content: Text('Gagal melakukan upgrade paket. Coba lagi nanti.'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
+                  _showPaymentInstructions(selectedDuration);
+                },
+                icon: const Icon(Icons.chat_rounded, size: 16, color: Color(0xFF16A34A)),
+                label: const Text('Bantuan Admin', style: TextStyle(color: Color(0xFF16A34A))),
+              ),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  if (widget.kostId != null) {
+                    MidtransSnapPaymentDialog.show(
+                      context,
+                      kostId: widget.kostId!,
+                      kosName: widget.kosName,
+                      initialMonths: selectedDuration,
+                      onPaymentSuccess: _loadRooms,
+                    );
                   }
                 },
+                icon: const Icon(Icons.payment_rounded, size: 16),
+                label: const Text('Bayar via Midtrans Snap (Sandbox)'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
+                  backgroundColor: const Color(0xFF0F2648),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
-                child: const Text('Aktifkan Paket Juragan', style: TextStyle(fontWeight: FontWeight.bold)),
               ),
             ],
           );
         },
+      ),
+    );
+  }
+
+  /// Dialog Instruksi Pembayaran dan Konfirmasi WhatsApp ke Super Admin
+  void _showPaymentInstructions(int months) {
+    final nominalText = months == 1 ? 'Rp 50.000 (1 Bulan)' : 'Rp 500.000 (1 Tahun - Hemat 2 Bulan)';
+    final message = 'Halo Super Admin Atur Kos, saya ingin upgrade kos "${widget.kosName}" (ID: ${widget.kostId}) ke Paket Juragan ($nominalText). Mohon info rekening/QRIS untuk pembayaran dan aktivasinya.';
+    final encodedMsg = Uri.encodeComponent(message);
+    final waUrl = Uri.parse('https://wa.me/6281234567890?text=$encodedMsg');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF2563EB)),
+            SizedBox(width: 10),
+            Text('Instruksi Pembayaran', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Paket Dipilih: Paket Juragan ($nominalText)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E40AF))),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFCBD5E1)),
+              ),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Metode Pembayaran:', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                  SizedBox(height: 4),
+                  Text('Midtrans Payment Gateway\n(QRIS & Virtual Account Semua Bank)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Gunakan tombol "Bayar via Midtrans Snap (Sandbox)" pada layar sebelumnya untuk aktivasi instan tanpa verifikasi manual.',
+              style: TextStyle(fontSize: 12, color: Color(0xFF475569), height: 1.45),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Tutup', style: TextStyle(color: Color(0xFF64748B))),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                if (await canLaunchUrl(waUrl)) {
+                  await launchUrl(waUrl, mode: LaunchMode.externalApplication);
+                } else {
+                  await launchUrl(waUrl);
+                }
+              } catch (_) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Silakan hubungi WhatsApp Super Admin: 0812-3456-7890\nPesan: $message'),
+                    ),
+                  );
+                }
+              }
+            },
+            icon: const Icon(Icons.chat_rounded, size: 16),
+            label: const Text('Kirim Bukti ke WhatsApp'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF16A34A),
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -509,8 +583,47 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
     );
   }
 
-  // Pasang Kamar Preset Default Kos Princess (10 Kamar Siap Pakai)
+  // Pasang Kamar Preset Default Kos (10 Kamar Siap Pakai)
   Future<void> _populateDefaultPresetRooms() async {
+    final maxAllowed = _kostModel?.maxRooms ?? 5;
+    if (_rooms.length + 10 > maxAllowed) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: const Row(
+            children: [
+              Icon(Icons.lock_rounded, color: Color(0xFFD97706)),
+              SizedBox(width: 10),
+              Text('Batas Kuota Kamar', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Text(
+            'Preset contoh ini menyediakan 10 kamar, namun Paket Starter Anda hanya mendukung maksimal $maxAllowed kamar.\n\nSilakan upgrade ke Paket Juragan (kuota hingga 25 kamar) untuk memasang seluruh kamar contoh ini.',
+            style: const TextStyle(fontSize: 13, color: Color(0xFF334155), height: 1.45),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _showUpgradeDialog();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2563EB),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Upgrade ke Juragan'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(

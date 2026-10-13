@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:atur_kos/models/user_profile.dart';
 import 'package:atur_kos/services/auth_service.dart';
@@ -10,7 +11,7 @@ import 'package:atur_kos/screens/owner/invoice_management_screen.dart';
 import 'package:atur_kos/screens/owner/tenant_allocation_screen.dart';
 import 'package:atur_kos/screens/owner/complaint_management_screen.dart';
 import 'package:atur_kos/screens/owner/room_poster_generator_screen.dart';
-import 'package:atur_kos/screens/admin/super_admin_dashboard_screen.dart';
+import 'package:atur_kos/screens/payment/midtrans_snap_payment_dialog.dart';
 import 'package:atur_kos/utils/format_utils.dart';
 
 /// Halaman Dasbor Utama untuk Peran Pemilik Kos (Owner)
@@ -344,6 +345,183 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
     }
   }
 
+  /// Hubungi WhatsApp resmi Super Admin Atur Kos untuk pembayaran atau aktivasi
+  Future<void> _contactSuperAdminWA({String? customMessage}) async {
+    final kosName = _kosProfile?['nama_kost']?.toString() ?? 'Kos Saya';
+    final kodeKost = _kosProfile?['kode_kost']?.toString() ?? '-';
+    final message = customMessage ??
+        'Halo Super Admin Atur Kos, saya pemilik kos "$kosName" (Kode: $kodeKost). Saya ingin berlangganan Paket Juragan ⭐. Mohon informasi rekening/QRIS untuk pembayaran dan aktivasinya.';
+    final encodedMsg = Uri.encodeComponent(message);
+    final waUrl = Uri.parse('https://wa.me/6281234567890?text=$encodedMsg');
+    try {
+      if (await canLaunchUrl(waUrl)) {
+        await launchUrl(waUrl, mode: LaunchMode.externalApplication);
+      } else {
+        await launchUrl(waUrl);
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Silakan hubungi WhatsApp Super Admin: 0812-3456-7890\nPesan: $message'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Dialog Paywall Berlangganan Paket Juragan untuk Pemilik Kos Starter
+  void _showPremiumUpgradeDialog({required String featureName}) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.workspace_premium_rounded, color: Color(0xFF1D4ED8), size: 26),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Fitur Eksklusif Juragan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text('Upgrade ke Paket Juragan ⭐', style: TextStyle(fontSize: 12, color: Color(0xFF2563EB), fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Fitur "$featureName" merupakan fitur premium yang hanya terbuka untuk pemilik kos yang telah berlangganan Paket Juragan.',
+                style: const TextStyle(fontSize: 13, color: Color(0xFF334155), height: 1.45),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Keuntungan Paket Juragan:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                    SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 16),
+                        SizedBox(width: 8),
+                        Expanded(child: Text('Kapasitas hingga 25 Kamar (Starter maks 5)', style: TextStyle(fontSize: 11, color: Color(0xFF334155)))),
+                      ],
+                    ),
+                    SizedBox(height: 5),
+                    Row(
+                      children: [
+                        Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 16),
+                        SizedBox(width: 8),
+                        Expanded(child: Text('AI Generator Poster Promosi (Format IG & WA)', style: TextStyle(fontSize: 11, color: Color(0xFF334155)))),
+                      ],
+                    ),
+                    SizedBox(height: 5),
+                    Row(
+                      children: [
+                        Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 16),
+                        SizedBox(width: 8),
+                        Expanded(child: Text('Radar Mitigasi Kamar Kosong H-30 Otomatis', style: TextStyle(fontSize: 11, color: Color(0xFF334155)))),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFBFDBFE)),
+                ),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Pilihan Biaya Langganan:',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1E40AF)),
+                    ),
+                    SizedBox(height: 4),
+                    Text('• 1 Bulan: Rp 50.000 / kos\n• 1 Tahun: Rp 500.000 / kos (Hemat 2 Bulan)', style: TextStyle(fontSize: 12, color: Color(0xFF1E3A8A))),
+                    Divider(height: 14, color: Color(0xFFBFDBFE)),
+                    Row(
+                      children: [
+                        Icon(Icons.verified_user_rounded, size: 16, color: Color(0xFF2563EB)),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Pembayaran Otomatis & Terverifikasi Real-Time via Midtrans Payment Gateway (QRIS & Virtual Account Semua Bank).',
+                            style: TextStyle(fontSize: 11, color: Color(0xFF1E40AF), fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Nanti Saja', style: TextStyle(color: Color(0xFF64748B))),
+          ),
+          OutlinedButton.icon(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _contactSuperAdminWA();
+            },
+            icon: const Icon(Icons.chat_rounded, size: 16, color: Color(0xFF16A34A)),
+            label: const Text('Bantuan Admin', style: TextStyle(color: Color(0xFF16A34A))),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(ctx);
+              final resolvedKostId = widget.profile.kostId ?? _kosProfile?['id']?.toString() ?? '';
+              final kosName = _kosProfile?['nama_kost']?.toString() ?? 'Kos Saya';
+              MidtransSnapPaymentDialog.show(
+                context,
+                kostId: resolvedKostId,
+                kosName: kosName,
+                onPaymentSuccess: _fetchDashboardData,
+              );
+            },
+            icon: const Icon(Icons.payment_rounded, size: 16),
+            label: const Text('Bayar via Midtrans Snap (Sandbox)'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0F2648),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Verifikasi cepat pembayaran dari dasbor (PRD US-3.3 & US-6.1)
   Future<void> _verifyInvoiceQuick(Map<String, dynamic> invoice) async {
     final isVerified = _kosProfile?['status_verifikasi'] == 'active';
@@ -499,6 +677,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
     final kosName = _kosProfile?['nama_kost']?.toString() ?? 'Kos Princess';
     final resolvedKostId = widget.profile.kostId ?? _kosProfile?['id']?.toString();
     final isVerified = _kosProfile?['status_verifikasi'] == 'active';
+    final isJuragan = _kosProfile?['tier']?.toString().toLowerCase() == 'juragan';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -561,46 +740,33 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
             icon: const Icon(Icons.tune_rounded, color: Color(0xFF1E40AF)),
             onPressed: _openKosSettings,
           ),
-          PopupMenuButton<String>(
-            tooltip: 'Menu Lainnya',
-            icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF1E40AF)),
-            onSelected: (val) async {
-              if (val == 'admin') {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => SuperAdminDashboardScreen(
-                      profile: widget.profile.copyWith(role: UserRole.superAdmin),
+          IconButton(
+            tooltip: 'Keluar Akun',
+            icon: const Icon(Icons.logout_rounded, color: Color(0xFFDC2626)),
+            onPressed: () async {
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  title: const Text('Keluar Akun', style: TextStyle(fontWeight: FontWeight.bold)),
+                  content: const Text('Apakah Anda yakin ingin keluar dari akun Atur Kos?'),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFDC2626),
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text('Keluar'),
                     ),
-                  ),
-                );
-              } else if (val == 'logout') {
+                  ],
+                ),
+              );
+              if (confirm == true) {
                 await AuthService.signOut();
               }
             },
-            itemBuilder: (ctx) => [
-              const PopupMenuItem(
-                value: 'admin',
-                child: Row(
-                  children: [
-                    Icon(Icons.admin_panel_settings_rounded, color: Color(0xFF1E40AF), size: 20),
-                    SizedBox(width: 10),
-                    Text('Portal Super Admin'),
-                  ],
-                ),
-              ),
-              const PopupMenuDivider(),
-              const PopupMenuItem(
-                value: 'logout',
-                child: Row(
-                  children: [
-                    Icon(Icons.logout_rounded, color: Colors.red, size: 20),
-                    SizedBox(width: 10),
-                    Text('Keluar Akun', style: TextStyle(color: Colors.red)),
-                  ],
-                ),
-              ),
-            ],
           ),
           const SizedBox(width: 4),
         ],
@@ -666,21 +832,28 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.2),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Text(
-                                  _kosProfile?['tier']?.toString().toLowerCase() == 'juragan'
-                                      ? '⭐ Paket Juragan'
-                                      : 'Paket Starter (Maks 5)',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
+                              InkWell(
+                                onTap: isJuragan
+                                    ? null
+                                    : () => _showPremiumUpgradeDialog(featureName: 'Paket Juragan'),
+                                borderRadius: BorderRadius.circular(10),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: isJuragan ? Colors.white.withValues(alpha: 0.2) : const Color(0xFFFEF3C7),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: isJuragan ? null : Border.all(color: const Color(0xFFFCD34D)),
+                                  ),
+                                  child: Text(
+                                    isJuragan
+                                        ? '⭐ Paket Juragan'
+                                        : 'Paket Starter (Maks 5) • Upgrade ⭐',
+                                    style: TextStyle(
+                                      color: isJuragan ? Colors.white : const Color(0xFF92400E),
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -1325,10 +1498,18 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                   icon: Icons.campaign_rounded,
                   color: const Color(0xFFD97706),
                   title: 'Poster Promosi AI & Radar H-30',
-                  subtitle: 'Pemasaran kamar kosong & radar konfirmasi akhir sewa',
+                  subtitle: isJuragan
+                      ? 'Pemasaran kamar kosong & radar konfirmasi akhir sewa'
+                      : '⭐ Fitur Eksklusif Paket Juragan (Berlangganan)',
                   isLocked: !isVerified,
+                  isPremium: true,
+                  isJuragan: isJuragan,
                   onTap: () {
-                    _guardedFeatureAction('Poster Promosi AI & Radar H-30', () {
+                    if (!isVerified) {
+                      _guardedFeatureAction('Poster Promosi AI & Radar H-30', () {});
+                    } else if (!isJuragan) {
+                      _showPremiumUpgradeDialog(featureName: 'Poster Promosi AI & Radar H-30');
+                    } else {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -1338,7 +1519,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                           ),
                         ),
                       ).then((_) => _fetchDashboardData());
-                    });
+                    }
                   },
                 ),
 
@@ -1711,7 +1892,11 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
     required String subtitle,
     required VoidCallback onTap,
     bool isLocked = false,
+    bool isPremium = false,
+    bool isJuragan = false,
   }) {
+    final showPremiumLock = isPremium && !isJuragan;
+
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(18),
@@ -1722,7 +1907,12 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: isLocked ? const Color(0xFFFDE68A) : const Color(0xFFF1F5F9)),
+            border: Border.all(
+              color: isLocked
+                  ? const Color(0xFFFDE68A)
+                  : (showPremiumLock ? const Color(0xFFBFDBFE) : const Color(0xFFF1F5F9)),
+              width: showPremiumLock ? 1.5 : 1,
+            ),
           ),
           child: Row(
             children: [
@@ -1731,12 +1921,16 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                 decoration: BoxDecoration(
                   color: isLocked
                       ? const Color(0xFFFEF3C7)
-                      : color.withValues(alpha: 0.1),
+                      : (showPremiumLock ? const Color(0xFFEFF6FF) : color.withValues(alpha: 0.1)),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
-                  isLocked ? Icons.lock_rounded : icon,
-                  color: isLocked ? const Color(0xFFD97706) : color,
+                  isLocked
+                      ? Icons.lock_rounded
+                      : (showPremiumLock ? Icons.workspace_premium_rounded : icon),
+                  color: isLocked
+                      ? const Color(0xFFD97706)
+                      : (showPremiumLock ? const Color(0xFF1D4ED8) : color),
                   size: 22,
                 ),
               ),
@@ -1772,6 +1966,23 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                                 color: Color(0xFFB45309),
                               ),
                             ),
+                          )
+                        else if (showPremiumLock)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF6FF),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFFBFDBFE)),
+                            ),
+                            child: const Text(
+                              '⭐ Juragan',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1D4ED8),
+                              ),
+                            ),
                           ),
                       ],
                     ),
@@ -1780,8 +1991,10 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                       isLocked ? 'Verifikasi kos terlebih dahulu untuk akses' : subtitle,
                       style: TextStyle(
                         fontSize: 11,
-                        color: isLocked ? const Color(0xFFB45309) : const Color(0xFF64748B),
-                        fontWeight: isLocked ? FontWeight.w500 : FontWeight.normal,
+                        color: isLocked
+                            ? const Color(0xFFB45309)
+                            : (showPremiumLock ? const Color(0xFF2563EB) : const Color(0xFF64748B)),
+                        fontWeight: (isLocked || showPremiumLock) ? FontWeight.w500 : FontWeight.normal,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,

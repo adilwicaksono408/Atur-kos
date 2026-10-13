@@ -56,6 +56,11 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
         tenantId: tenantId,
       );
       _h30Status = assignment['h30_response']?.toString();
+      if (assignment['kosts'] is Map<String, dynamic>) {
+        linkedKos = assignment['kosts'] as Map<String, dynamic>;
+      } else if (kostId != null && kostId.isNotEmpty) {
+        linkedKos = await KosService.getKosProfile(kostId);
+      }
     } else {
       // Jika belum dialokasikan kamar, cek apakah profil sudah terhubung ke suatu kos
       try {
@@ -106,6 +111,23 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
           : 'Kak Penghuni';
     }
     return name;
+  }
+
+  String _getKosName() {
+    if (_linkedKosData != null &&
+        _linkedKosData!['nama_kost'] != null &&
+        _linkedKosData!['nama_kost'].toString().trim().isNotEmpty) {
+      return _linkedKosData!['nama_kost'].toString();
+    }
+    if (_assignmentData != null) {
+      final kosts = _assignmentData!['kosts'];
+      if (kosts is Map &&
+          kosts['nama_kost'] != null &&
+          kosts['nama_kost'].toString().trim().isNotEmpty) {
+        return kosts['nama_kost'].toString();
+      }
+    }
+    return 'Kos';
   }
 
   void _handleUploadProof() {
@@ -495,9 +517,9 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
             ),
           ],
         ),
-        content: const Text(
-          'Masa sewa Anda mendekati periode akhir. Untuk kenyamanan bersama dan perencanaan operasional kamar, apakah Anda akan melanjutkan sewa di Kos Princess untuk bulan berikutnya?',
-          style: TextStyle(fontSize: 13, height: 1.5, color: Color(0xFF475569)),
+        content: Text(
+          'Masa sewa Anda mendekati periode akhir. Untuk kenyamanan bersama dan perencanaan operasional kamar, apakah Anda akan melanjutkan sewa di ${_getKosName()} untuk bulan berikutnya?',
+          style: const TextStyle(fontSize: 13, height: 1.5, color: Color(0xFF475569)),
         ),
         actions: [
           OutlinedButton(
@@ -585,7 +607,7 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
                   ),
                 ),
                 Text(
-                  'Kos Princess',
+                  _getKosName(),
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: const Color(0xFF0F172A),
@@ -656,7 +678,7 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
                             const SizedBox(height: 4),
                             Text(
                               hasRoom
-                                  ? 'Selamat beraktivitas di Kos Princess. Seluruh layanan kenyamanan kamar siap diakses.'
+                                  ? 'Selamat beraktivitas di ${_getKosName()}. Seluruh layanan kenyamanan kamar siap diakses.'
                                   : 'Akun Anda aktif. Saat ini menunggu pemilik kos menghubungkan nomor kamar Anda.',
                               style: const TextStyle(color: Colors.white70, fontSize: 12),
                             ),

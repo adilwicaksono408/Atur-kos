@@ -5,6 +5,7 @@ import 'package:atur_kos/models/kost_model.dart';
 import 'package:atur_kos/models/user_profile.dart';
 import 'package:atur_kos/services/auth_service.dart';
 import 'package:atur_kos/services/kos_service.dart';
+import 'package:atur_kos/utils/format_utils.dart';
 
 /// Dasbor Portal Super Admin Platform Atur Kos (PRD v2.0.0 Modul 1 & 2)
 /// Digunakan oleh tim pengembang/pengelola platform untuk:
@@ -133,6 +134,19 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
     );
 
     if (confirm == true) {
+      // Optimistic Update: Langsung ubah status di antarmuka seketika
+      setState(() {
+        final idx = _allKosts.indexWhere((k) => k.id == kos.id);
+        if (idx != -1) {
+          _allKosts[idx] = kos.copyWith(
+            statusVerifikasi: KostStatus.active,
+            catatanVerifikasiAdmin: 'Disetujui oleh Super Admin (${widget.profile.fullName})',
+          );
+        }
+      });
+      // Pindahkan tampilan tab ke 'Aktif' agar Super Admin langsung melihat kos berstatus aktif
+      _tabController.animateTo(2);
+
       final success = await KosService.verifyKostByAdmin(
         kostId: kos.id,
         status: KostStatus.active,
@@ -147,15 +161,15 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
               behavior: SnackBarBehavior.floating,
             ),
           );
-          _loadData();
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Gagal memperbarui status kos. Periksa koneksi.'),
+              content: Text('Gagal menyimpan ke database. Pastikan skrip RLS Super Admin telah dijalankan.'),
               backgroundColor: Colors.red,
             ),
           );
         }
+        _loadData();
       }
     }
   }
@@ -223,12 +237,27 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
     );
 
     if (confirm == true) {
+      final rejectNote = noteController.text.trim().isNotEmpty
+          ? noteController.text.trim()
+          : 'Data pengajuan belum memenuhi syarat verifikasi.';
+
+      // Optimistic Update: Langsung ubah status seketika
+      setState(() {
+        final idx = _allKosts.indexWhere((k) => k.id == kos.id);
+        if (idx != -1) {
+          _allKosts[idx] = kos.copyWith(
+            statusVerifikasi: KostStatus.rejected,
+            catatanVerifikasiAdmin: rejectNote,
+          );
+        }
+      });
+      // Pindahkan tampilan tab ke 'Ditolak / Dibekukan'
+      _tabController.animateTo(3);
+
       final success = await KosService.verifyKostByAdmin(
         kostId: kos.id,
         status: KostStatus.rejected,
-        catatanAdmin: noteController.text.trim().isNotEmpty
-            ? noteController.text.trim()
-            : 'Data pengajuan belum memenuhi syarat verifikasi.',
+        catatanAdmin: rejectNote,
       );
       if (mounted) {
         if (success) {
@@ -239,15 +268,15 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
               behavior: SnackBarBehavior.floating,
             ),
           );
-          _loadData();
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Gagal menolak pengajuan kos. Coba lagi nanti.'),
+              content: Text('Gagal menyimpan penolakan ke database. Pastikan skrip RLS telah dijalankan.'),
               backgroundColor: Colors.red,
             ),
           );
         }
+        _loadData();
       }
     }
   }
@@ -281,12 +310,246 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
     );
 
     if (confirm == true) {
+      // Optimistic Update
+      setState(() {
+        final idx = _allKosts.indexWhere((k) => k.id == kos.id);
+        if (idx != -1) {
+          _allKosts[idx] = kos.copyWith(
+            statusVerifikasi: newStatus,
+            catatanVerifikasiAdmin: kos.isSuspended ? 'Diaktifkan kembali oleh admin' : 'Dibekukan oleh admin',
+          );
+        }
+      });
+      _tabController.animateTo(newStatus == KostStatus.active ? 2 : 3);
+
       final success = await KosService.verifyKostByAdmin(
         kostId: kos.id,
         status: newStatus,
         catatanAdmin: kos.isSuspended ? 'Diaktifkan kembali oleh admin' : 'Dibekukan oleh admin',
       );
-      if (mounted && success) {
+      if (mounted) {
+        if (!success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Gagal memperbarui status di database. Pastikan skrip RLS telah dijalankan.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        _loadData();
+      }
+    }
+  }
+
+  /// Dialog Super Admin untuk mengelola Paket SaaS Langganan (Starter vs Juragan)
+  Future<void> _showManageSubscriptionDialog(KostModel kos) async {
+    SubscriptionTier selectedTier = kos.tier;
+    int selectedMonths = 1;
+
+    final updated = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.stars_rounded, color: Color(0xFF2563EB), size: 24),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Kelola Langganan (SaaS)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    Text('Tier & Kuota Kamar Pemilik', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(kos.namaKost, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Status Saat Ini: ${kos.tier.label} (Maks ${kos.maxRooms} Kamar)',
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('Pilih Paket Langganan:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 8),
+              InkWell(
+                onTap: () => setDialogState(() => selectedTier = SubscriptionTier.starter),
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: selectedTier == SubscriptionTier.starter ? const Color(0xFFF1F5F9) : Colors.transparent,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: selectedTier == SubscriptionTier.starter ? const Color(0xFF0F172A) : const Color(0xFFE2E8F0),
+                      width: selectedTier == SubscriptionTier.starter ? 1.5 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        selectedTier == SubscriptionTier.starter ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                        size: 20,
+                        color: selectedTier == SubscriptionTier.starter ? const Color(0xFF0F172A) : const Color(0xFF94A3B8),
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Paket Starter (Gratis)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                            Text('Maks 5 Kamar • Fitur Dasar', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              InkWell(
+                onTap: () => setDialogState(() => selectedTier = SubscriptionTier.juragan),
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: selectedTier == SubscriptionTier.juragan ? const Color(0xFFEFF6FF) : Colors.transparent,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: selectedTier == SubscriptionTier.juragan ? const Color(0xFF2563EB) : const Color(0xFFE2E8F0),
+                      width: selectedTier == SubscriptionTier.juragan ? 1.5 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        selectedTier == SubscriptionTier.juragan ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                        size: 20,
+                        color: selectedTier == SubscriptionTier.juragan ? const Color(0xFF2563EB) : const Color(0xFF94A3B8),
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text('⭐ Paket Juragan', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1D4ED8))),
+                                SizedBox(width: 6),
+                                Text('(Premium)', style: TextStyle(fontSize: 11, color: Color(0xFF2563EB))),
+                              ],
+                            ),
+                            Text('Maks 25 Kamar • WA Otomatis • AI Poster Promosi', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (selectedTier == SubscriptionTier.juragan) ...[
+                const SizedBox(height: 10),
+                const Text('Durasi Langganan:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    ChoiceChip(
+                      label: const Text('1 Bulan (Rp 50.000)'),
+                      selected: selectedMonths == 1,
+                      onSelected: (sel) {
+                        if (sel) setDialogState(() => selectedMonths = 1);
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: const Text('1 Tahun (Rp 500.000)'),
+                      selected: selectedMonths == 12,
+                      onSelected: (sel) {
+                        if (sel) setDialogState(() => selectedMonths = 12);
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1E40AF),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('Simpan Paket'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (updated == true) {
+      // Optimistic update
+      setState(() {
+        final idx = _allKosts.indexWhere((k) => k.id == kos.id);
+        if (idx != -1) {
+          _allKosts[idx] = kos.copyWith(
+            tier: selectedTier,
+            maxRooms: selectedTier.defaultMaxRooms,
+          );
+        }
+      });
+
+      final success = await KosService.upgradeKostSubscription(
+        kostId: kos.id,
+        tier: selectedTier,
+        months: selectedMonths,
+      );
+      if (mounted) {
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Paket properti "${kos.namaKost}" berhasil diubah menjadi ${selectedTier.label}! Kuota maks kamar kini ${selectedTier.defaultMaxRooms}.'),
+              backgroundColor: const Color(0xFF16A34A),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Gagal memperbarui paket langganan.'), backgroundColor: Colors.red),
+          );
+        }
         _loadData();
       }
     }
@@ -383,6 +646,7 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
     final pendingCount = _allKosts.where((k) => k.isPending).length;
     final activeCount = _allKosts.where((k) => k.isActive).length;
     final otherCount = _allKosts.where((k) => k.isRejected || k.isSuspended).length;
+    final juraganCount = _allKosts.where((k) => k.isJuragan).length;
     final filteredKosts = _getFilteredKosts();
 
     return Scaffold(
@@ -537,6 +801,13 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
                           value: '$activeCount',
                           color: const Color(0xFF16A34A),
                           icon: Icons.check_circle_outline,
+                        ),
+                        const SizedBox(width: 12),
+                        _buildStatCard(
+                          title: 'Langganan Juragan ⭐',
+                          value: '$juraganCount',
+                          color: const Color(0xFF1D4ED8),
+                          icon: Icons.workspace_premium_rounded,
                         ),
                         const SizedBox(width: 12),
                         _buildStatCard(
@@ -743,23 +1014,41 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
                   ],
                 ),
               ),
-              // Badge Paket
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                margin: const EdgeInsets.only(right: 8),
-                decoration: BoxDecoration(
-                  color: kos.isJuragan ? const Color(0xFFEFF6FF) : const Color(0xFFF1F5F9),
+              // Badge Paket (Dapat diklik oleh Super Admin untuk upgrade/downgrade)
+              Tooltip(
+                message: 'Klik untuk kelola status paket langganan SaaS',
+                child: InkWell(
+                  onTap: () => _showManageSubscriptionDialog(kos),
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: kos.isJuragan ? const Color(0xFF93C5FD) : const Color(0xFFCBD5E1),
-                  ),
-                ),
-                child: Text(
-                  kos.tier.label,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: kos.isJuragan ? const Color(0xFF1D4ED8) : const Color(0xFF475569),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                      color: kos.isJuragan ? const Color(0xFFEFF6FF) : const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: kos.isJuragan ? const Color(0xFF93C5FD) : const Color(0xFFCBD5E1),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          kos.tier.label,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: kos.isJuragan ? const Color(0xFF1D4ED8) : const Color(0xFF475569),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(
+                          Icons.edit_note_rounded,
+                          size: 14,
+                          color: kos.isJuragan ? const Color(0xFF1D4ED8) : const Color(0xFF64748B),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -813,6 +1102,21 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
                 'Maks Kamar: ${kos.maxRooms}',
                 style: const TextStyle(fontSize: 13, color: Color(0xFF334155)),
               ),
+              if (kos.isJuragan) ...[
+                const SizedBox(width: 16),
+                const Icon(Icons.workspace_premium_rounded, size: 16, color: Color(0xFF1D4ED8)),
+                const SizedBox(width: 6),
+                Text(
+                  kos.subscriptionExpiresAt != null
+                      ? 'Aktif s/d: ${FormatUtils.formatDate(kos.subscriptionExpiresAt)}'
+                      : 'Langganan Juragan Aktif',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1D4ED8),
+                  ),
+                ),
+              ],
             ],
           ),
 
@@ -904,6 +1208,30 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       side: const BorderSide(color: Color(0xFFCBD5E1)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    icon: Icon(
+                      Icons.stars_rounded,
+                      size: 16,
+                      color: kos.isJuragan ? const Color(0xFF1D4ED8) : const Color(0xFFD97706),
+                    ),
+                    label: Text(
+                      kos.isJuragan ? 'Paket Juragan ⭐' : 'Kelola Paket',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: kos.isJuragan ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                    onPressed: () => _showManageSubscriptionDialog(kos),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      side: BorderSide(
+                        color: kos.isJuragan ? const Color(0xFF93C5FD) : const Color(0xFFFCD34D),
+                      ),
+                      backgroundColor: kos.isJuragan ? const Color(0xFFEFF6FF) : const Color(0xFFFFFBEB),
+                      foregroundColor: kos.isJuragan ? const Color(0xFF1D4ED8) : const Color(0xFFB45309),
                     ),
                   ),
                 ],

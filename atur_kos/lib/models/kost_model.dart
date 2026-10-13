@@ -184,4 +184,50 @@ class KostModel {
       'subscription_expires_at': subscriptionExpiresAt?.toIso8601String(),
     };
   }
+
+  KostModel copyWith({
+    String? id,
+    String? namaKost,
+    String? alamat,
+    String? nomorKontak,
+    String? rekeningBank,
+    String? namaPemilikRekening,
+    String? kodeKost,
+    double? latitude,
+    double? longitude,
+    String? googleMapsUrl,
+    String? fotoBangunanUrl,
+    String? dokumenKtpUrl,
+    KostStatus? statusVerifikasi,
+    String? catatanVerifikasiAdmin,
+    DateTime? diverifikasiPada,
+    SubscriptionTier? tier,
+    int? maxRooms,
+    DateTime? subscriptionExpiresAt,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return KostModel(
+      id: id ?? this.id,
+      namaKost: namaKost ?? this.namaKost,
+      alamat: alamat ?? this.alamat,
+      nomorKontak: nomorKontak ?? this.nomorKontak,
+      rekeningBank: rekeningBank ?? this.rekeningBank,
+      namaPemilikRekening: namaPemilikRekening ?? this.namaPemilikRekening,
+      kodeKost: kodeKost ?? this.kodeKost,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      googleMapsUrl: googleMapsUrl ?? this.googleMapsUrl,
+      fotoBangunanUrl: fotoBangunanUrl ?? this.fotoBangunanUrl,
+      dokumenKtpUrl: dokumenKtpUrl ?? this.dokumenKtpUrl,
+      statusVerifikasi: statusVerifikasi ?? this.statusVerifikasi,
+      catatanVerifikasiAdmin: catatanVerifikasiAdmin ?? this.catatanVerifikasiAdmin,
+      diverifikasiPada: diverifikasiPada ?? this.diverifikasiPada,
+      tier: tier ?? this.tier,
+      maxRooms: maxRooms ?? this.maxRooms,
+      subscriptionExpiresAt: subscriptionExpiresAt ?? this.subscriptionExpiresAt,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
 }

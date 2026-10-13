@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:atur_kos/services/kos_service.dart';
 import 'package:atur_kos/utils/format_utils.dart';
+import 'package:atur_kos/screens/payment/midtrans_snap_payment_dialog.dart';
 
 /// Halaman Mitigasi Kamar Kosong H-30 & Generator Poster Promosi Pemasaran (PRD Modul 5)
 /// Memungkinkan pemilik memantau kamar yang akan habis sewa dan menghasilkan poster grafis siap sebar
@@ -153,13 +155,205 @@ https://wa.me/$cleanPhone ($ownerName - ${widget.kosName})''';
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF1E40AF)))
-          : TabBarView(
-              controller: _tabController,
-              children: [
-                _buildPosterGeneratorTab(),
-                _buildRadarTab(),
-              ],
-            ),
+          : (_kosProfile?['tier']?.toString().toLowerCase() != 'juragan'
+              ? _buildPaywallView()
+              : TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildPosterGeneratorTab(),
+                    _buildRadarTab(),
+                  ],
+                )),
+    );
+  }
+
+  Widget _buildPaywallView() {
+    final message = 'Halo Super Admin Atur Kos, saya pemilik kos "${widget.kosName}" (ID: ${widget.kostId}). Saya ingin berlangganan Paket Juragan ⭐ untuk membuka fitur Generator Poster Promosi AI & Radar H-30. Mohon informasi rekening/QRIS pembayaran.';
+    final encodedMsg = Uri.encodeComponent(message);
+    final waUrl = Uri.parse('https://wa.me/6281234567890?text=$encodedMsg');
+
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 500),
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFEFF6FF),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.workspace_premium_rounded,
+                  color: Color(0xFF1D4ED8),
+                  size: 40,
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Fitur Eksklusif Paket Juragan ⭐',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Generator Poster Promosi AI & Radar Mitigasi H-30 hanya tersedia untuk kos yang telah berlangganan Paket Juragan.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF64748B),
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: const Column(
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 18),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text('Kapasitas Kamar Terbuka hingga 25 Kamar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 18),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text('Desain Poster Otomatis Feed & Story WA / Instagram', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 18),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text('Radar Deteksi Penghuni Selesai Sewa H-30', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFBFDBFE)),
+                ),
+                child: const Column(
+                  children: [
+                    Text('Biaya Langganan: Rp 50.000 / bln atau Rp 500.000 / thn', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1E40AF))),
+                    SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.verified_user_rounded, size: 14, color: Color(0xFF2563EB)),
+                        SizedBox(width: 6),
+                        Text('Pembayaran otomatis via Midtrans Snap (QRIS & VA Semua Bank)', style: TextStyle(fontSize: 11, color: Color(0xFF1E40AF), fontWeight: FontWeight.w500)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    final targetKostId = widget.kostId ?? _kosProfile?['id']?.toString() ?? '';
+                    if (targetKostId.isNotEmpty) {
+                      MidtransSnapPaymentDialog.show(
+                        context,
+                        kostId: targetKostId,
+                        kosName: widget.kosName,
+                        initialMonths: 1,
+                        onPaymentSuccess: _loadData,
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.payment_rounded, size: 18),
+                  label: const Text('Bayar via Midtrans Snap (Sandbox)'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0F2648),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    try {
+                      if (await canLaunchUrl(waUrl)) {
+                        await launchUrl(waUrl, mode: LaunchMode.externalApplication);
+                      } else {
+                        await launchUrl(waUrl);
+                      }
+                    } catch (_) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Silakan hubungi WhatsApp Super Admin: 0812-3456-7890\nPesan: $message')),
+                        );
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.chat_rounded, size: 18, color: Color(0xFF16A34A)),
+                  label: const Text('Bantuan Manual via WhatsApp', style: TextStyle(color: Color(0xFF16A34A))),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    side: const BorderSide(color: Color(0xFF16A34A)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Kembali ke Dasbor', style: TextStyle(color: Color(0xFF64748B))),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

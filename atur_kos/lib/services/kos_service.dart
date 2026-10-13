@@ -493,15 +493,16 @@ class KosService {
   // 4. ALOKASI PENGHUNI KE KAMAR (PRD US-2.2)
   // ===========================================================================
 
-  /// Mengambil daftar penghuni yang terdaftar tapi belum memiliki kamar aktif
+  /// Mengambil daftar calon penghuni yang terdaftar tapi belum memiliki kamar aktif
+  /// Super Admin dan Pemilik Kos TIDAK PERNAH dimasukkan ke dalam daftar ini
   static Future<List<Map<String, dynamic>>> getUnallocatedTenants(
       String? kostId) async {
     try {
-      // 1. Ambil seluruh profil pengguna non-owner dari database
+      // 1. Ambil seluruh profil pengguna dengan role 'tenant' dari database
       final profilesData = await _client
           .from('profiles')
           .select('*')
-          .neq('role', 'owner');
+          .eq('role', 'tenant');
       final profiles = List<Map<String, dynamic>>.from(profilesData);
 
       // 2. Cek siapa saja yang sudah menempati kamar aktif di tabel tenants
@@ -513,24 +514,28 @@ class KosService {
           .map((t) => t['user_id']?.toString())
           .toSet();
 
-      // 3. Filter calon yang belum memiliki kamar aktif
-      final unallocated = profiles
-          .where((p) => !activeUserIds.contains(p['id']?.toString()))
-          .toList();
+      // 3. Filter calon yang belum memiliki kamar aktif dan pastikan bukan super_admin / owner
+      final unallocated = profiles.where((p) {
+        final role = p['role']?.toString().toLowerCase().trim();
+        final email = p['email']?.toString().toLowerCase().trim() ?? '';
+        final isTenant = role == 'tenant';
+        final isNotAdminOrOwner = role != 'super_admin' &&
+            role != 'owner' &&
+            !email.contains('wicaksonoadil768');
+        final isNotActive = !activeUserIds.contains(p['id']?.toString());
+        return isTenant && isNotAdminOrOwner && isNotActive;
+      }).toList();
 
-      // 4. Jika kostId spesifik disediakan, prioritaskan yang cocok dengan kos ini atau belum terikat
+      // 4. Jika kostId spesifik disediakan, ambil yang cocok dengan kos ini atau belum terikat kos manapun
       if (kostId != null && kostId.isNotEmpty) {
         final matching = unallocated.where((p) {
           final pKostId = p['kost_id']?.toString();
           return pKostId == null || pKostId.isEmpty || pKostId == kostId;
         }).toList();
 
-        if (matching.isNotEmpty) {
-          return matching;
-        }
+        return matching;
       }
 
-      // Fallback: kembalikan seluruh calon penghuni unallocated agar pemilik tidak kehilangan calon
       return unallocated;
     } catch (e) {
       debugPrint('Error getUnallocatedTenants: $e');
@@ -1082,11 +1087,13 @@ class KosService {
   }) async {
     try {
       final now = DateTime.now();
-      final expiresAt = now.add(Duration(days: months * 30));
+      final expiresAt = tier == SubscriptionTier.juragan
+          ? now.add(Duration(days: months * 30)).toIso8601String()
+          : null;
       await _client.from('kosts').update({
         'tier': tier.value,
         'max_rooms': tier.defaultMaxRooms,
-        'subscription_expires_at': expiresAt.toIso8601String(),
+        'subscription_expires_at': expiresAt,
         'updated_at': now.toIso8601String(),
       }).eq('id', kostId);
       return true;

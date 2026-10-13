@@ -42,7 +42,15 @@ class _TenantAllocationScreenState extends State<TenantAllocationScreen> {
       final allRooms = results[2];
       setState(() {
         _activeTenants = results[0];
-        _unallocatedProfiles = results[1];
+        _unallocatedProfiles = results[1].where((p) {
+          final role = p['role']?.toString().toLowerCase().trim();
+          final email = p['email']?.toString().toLowerCase().trim() ?? '';
+          final name = (p['full_name'] ?? p['nama'] ?? p['name'])?.toString().toLowerCase().trim() ?? '';
+          return role != 'super_admin' &&
+              role != 'owner' &&
+              !email.contains('wicaksonoadil768') &&
+              !name.contains('wicaksonoadil768');
+        }).toList();
         _emptyRooms = allRooms.where((r) => r['status'] == 'kosong').toList();
         _isLoading = false;
       });
