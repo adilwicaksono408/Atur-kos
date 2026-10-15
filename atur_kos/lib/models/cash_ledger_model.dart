@@ -215,11 +215,13 @@ class CashLedgerSummary {
       if (item.isMasuk) {
         masuk += item.nominal;
         countMasuk++;
-        incByCat[item.kategori] = (incByCat[item.kategori] ?? 0.0) + item.nominal;
+        incByCat[item.kategori] =
+            (incByCat[item.kategori] ?? 0.0) + item.nominal;
       } else {
         keluar += item.nominal;
         countKeluar++;
-        expByCat[item.kategori] = (expByCat[item.kategori] ?? 0.0) + item.nominal;
+        expByCat[item.kategori] =
+            (expByCat[item.kategori] ?? 0.0) + item.nominal;
       }
     }
 

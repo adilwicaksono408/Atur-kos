@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:atur_kos/models/cash_ledger_model.dart';
 import 'package:atur_kos/services/kos_service.dart';
@@ -52,7 +53,7 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
     'September',
     'Oktober',
     'November',
-    'Desember'
+    'Desember',
   ];
 
   @override
@@ -137,7 +138,10 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
   void _changeMonth(int delta) {
     setState(() {
       _isAllPeriod = false;
-      _selectedPeriod = DateTime(_selectedPeriod.year, _selectedPeriod.month + delta);
+      _selectedPeriod = DateTime(
+        _selectedPeriod.year,
+        _selectedPeriod.month + delta,
+      );
     });
   }
 
@@ -152,13 +156,41 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
     bool isSubmitting = false;
 
     final categories = [
-      {'key': 'listrik', 'label': '⚡ Token Listrik PLN', 'color': const Color(0xFFEAB308)},
-      {'key': 'wifi', 'label': '📶 WiFi & Internet', 'color': const Color(0xFF3B82F6)},
-      {'key': 'air', 'label': '💧 Air PDAM / Tangki', 'color': const Color(0xFF06B6D4)},
-      {'key': 'perbaikan', 'label': '🔧 Servis & Perbaikan Fasilitas', 'color': const Color(0xFFF97316)},
-      {'key': 'kebersihan', 'label': '🧹 Iuran Sampah & Kebersihan', 'color': const Color(0xFF10B981)},
-      {'key': 'gaji', 'label': '👤 Gaji Penjaga / Karyawan', 'color': const Color(0xFF8B5CF6)},
-      {'key': 'lainnya', 'label': '📦 Perlengkapan & Operasional Lain', 'color': const Color(0xFF64748B)},
+      {
+        'key': 'listrik',
+        'label': '⚡ Token Listrik PLN',
+        'color': const Color(0xFFEAB308),
+      },
+      {
+        'key': 'wifi',
+        'label': '📶 WiFi & Internet',
+        'color': const Color(0xFF3B82F6),
+      },
+      {
+        'key': 'air',
+        'label': '💧 Air PDAM / Tangki',
+        'color': const Color(0xFF06B6D4),
+      },
+      {
+        'key': 'perbaikan',
+        'label': '🔧 Servis & Perbaikan Fasilitas',
+        'color': const Color(0xFFF97316),
+      },
+      {
+        'key': 'kebersihan',
+        'label': '🧹 Iuran Sampah & Kebersihan',
+        'color': const Color(0xFF10B981),
+      },
+      {
+        'key': 'gaji',
+        'label': '👤 Gaji Penjaga / Karyawan',
+        'color': const Color(0xFF8B5CF6),
+      },
+      {
+        'key': 'lainnya',
+        'label': '📦 Perlengkapan & Operasional Lain',
+        'color': const Color(0xFF64748B),
+      },
     ];
 
     await showModalBottomSheet(
@@ -215,7 +247,10 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                                   ),
                                   Text(
                                     'Input nota biaya listrik, air, servis, atau tukang',
-                                    style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Color(0xFF64748B),
+                                    ),
                                   ),
                                 ],
                               ),
@@ -223,7 +258,10 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                           ),
                           IconButton(
                             onPressed: () => Navigator.pop(ctx),
-                            icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+                            icon: const Icon(
+                              Icons.close_rounded,
+                              color: Color(0xFF64748B),
+                            ),
                           ),
                         ],
                       ),
@@ -232,7 +270,11 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                       // Pilihan Kategori
                       const Text(
                         'Kategori Biaya Operasional',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF334155),
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Container(
@@ -251,7 +293,10 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                                 value: c['key'] as String,
                                 child: Text(
                                   c['label'] as String,
-                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               );
                             }).toList(),
@@ -268,34 +313,54 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                       // Input Nominal Pengeluaran
                       const Text(
                         'Nominal Biaya (Rp)',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF334155),
+                        ),
                       ),
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: nominalController,
                         keyboardType: TextInputType.number,
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFFDC2626)),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFFDC2626),
+                        ),
                         decoration: InputDecoration(
                           prefixText: 'Rp ',
-                          prefixStyle: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFDC2626)),
+                          prefixStyle: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFDC2626),
+                          ),
                           hintText: 'Misal: 350000',
                           filled: true,
                           fillColor: const Color(0xFFF8FAFC),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFE2E8F0),
+                            ),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFE2E8F0),
+                            ),
                           ),
                         ),
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
                             return 'Nominal wajib diisi';
                           }
-                          final parsed = double.tryParse(value.replaceAll(RegExp(r'[^0-9]'), ''));
+                          final parsed = double.tryParse(
+                            value.replaceAll(RegExp(r'[^0-9]'), ''),
+                          );
                           if (parsed == null || parsed <= 0) {
                             return 'Nominal harus lebih dari Rp 0';
                           }
@@ -308,22 +373,29 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                       SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         child: Row(
-                          children: [50000, 100000, 250000, 500000, 1000000].map((amt) {
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: ActionChip(
-                                label: Text(
-                                  FormatUtils.compactRupiah(amt),
-                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-                                ),
-                                backgroundColor: const Color(0xFFF1F5F9),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                onPressed: () {
-                                  nominalController.text = amt.toString();
-                                },
-                              ),
-                            );
-                          }).toList(),
+                          children: [50000, 100000, 250000, 500000, 1000000]
+                              .map((amt) {
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: ActionChip(
+                                    label: Text(
+                                      FormatUtils.compactRupiah(amt),
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    backgroundColor: const Color(0xFFF1F5F9),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    onPressed: () {
+                                      nominalController.text = amt.toString();
+                                    },
+                                  ),
+                                );
+                              })
+                              .toList(),
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -331,7 +403,11 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                       // Tanggal Pengeluaran
                       const Text(
                         'Tanggal Transaksi',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF334155),
+                        ),
                       ),
                       const SizedBox(height: 8),
                       InkWell(
@@ -340,7 +416,9 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                             context: context,
                             initialDate: selectedDate,
                             firstDate: DateTime(2020),
-                            lastDate: DateTime.now().add(const Duration(days: 30)),
+                            lastDate: DateTime.now().add(
+                              const Duration(days: 30),
+                            ),
                           );
                           if (picked != null) {
                             setModalState(() => selectedDate = picked);
@@ -348,7 +426,10 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                         },
                         borderRadius: BorderRadius.circular(12),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFF8FAFC),
                             borderRadius: BorderRadius.circular(12),
@@ -356,14 +437,27 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.calendar_today_rounded, size: 16, color: Color(0xFF64748B)),
+                              const Icon(
+                                Icons.calendar_today_rounded,
+                                size: 16,
+                                color: Color(0xFF64748B),
+                              ),
                               const SizedBox(width: 10),
                               Text(
                                 FormatUtils.formatDate(selectedDate),
-                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                               const Spacer(),
-                              const Text('Ubah', style: TextStyle(fontSize: 12, color: Color(0xFF1E40AF))),
+                              const Text(
+                                'Ubah',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF1E40AF),
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -373,7 +467,11 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                       // Keterangan Pengeluaran
                       const Text(
                         'Keterangan / Catatan Nota',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF334155),
+                        ),
                       ),
                       const SizedBox(height: 8),
                       TextFormField(
@@ -383,10 +481,15 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                           hintText: 'Misal: Beli token listrik kamar 01-05 & lampu teras',
                           filled: true,
                           fillColor: const Color(0xFFF8FAFC),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFE2E8F0),
+                            ),
                           ),
                         ),
                         validator: (value) {
@@ -401,7 +504,11 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                       // Link Bukti Nota (Opsional)
                       const Text(
                         'Link Bukti Nota / Foto Nota (Opsional)',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF64748B),
+                        ),
                       ),
                       const SizedBox(height: 6),
                       TextFormField(
@@ -410,10 +517,15 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                           hintText: 'https://... atau nomor nota kasir',
                           filled: true,
                           fillColor: const Color(0xFFF8FAFC),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFE2E8F0),
+                            ),
                           ),
                         ),
                       ),
@@ -432,14 +544,16 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
 
                                   final rawNominal = nominalController.text
                                       .replaceAll(RegExp(r'[^0-9.]'), '');
-                                  final nominal = double.tryParse(rawNominal) ?? 0.0;
+                                  final nominal =
+                                      double.tryParse(rawNominal) ?? 0.0;
                                   final resolvedKostId = widget.kostId ?? '';
 
                                   final success = await KosService.addExpense(
                                     kostId: resolvedKostId,
                                     kategori: selectedKategori,
                                     nominal: nominal,
-                                    keterangan: keteranganController.text.trim(),
+                                    keterangan: keteranganController.text
+                                        .trim(),
                                     tanggal: selectedDate,
                                     buktiNotaUrl: notaUrlController.text.trim(),
                                   );
@@ -471,7 +585,11 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                                   ),
                                 )
                               : const Icon(Icons.check_rounded, size: 20),
-                          label: Text(isSubmitting ? 'Menyimpan...' : 'Simpan Pengeluaran Kas'),
+                          label: Text(
+                            isSubmitting
+                                ? 'Menyimpan...'
+                                : 'Simpan Pengeluaran Kas',
+                          ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFDC2626),
                             foregroundColor: Colors.white,
@@ -555,7 +673,10 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                                   ),
                                   Text(
                                     'Untuk pembayaran tunai langsung dari anak kos',
-                                    style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Color(0xFF64748B),
+                                    ),
                                   ),
                                 ],
                               ),
@@ -563,7 +684,10 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                           ),
                           IconButton(
                             onPressed: () => Navigator.pop(ctx),
-                            icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+                            icon: const Icon(
+                              Icons.close_rounded,
+                              color: Color(0xFF64748B),
+                            ),
                           ),
                         ],
                       ),
@@ -571,7 +695,11 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
 
                       const Text(
                         'Kategori Pemasukan',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF334155),
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Container(
@@ -586,10 +714,22 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                             value: selectedKategori,
                             isExpanded: true,
                             items: const [
-                              DropdownMenuItem(value: 'sewa_kamar', child: Text('🏠 Sewa Kamar Tunai')),
-                              DropdownMenuItem(value: 'deposit', child: Text('🛡️ Uang Jaminan / Deposit')),
-                              DropdownMenuItem(value: 'denda', child: Text('⚠️ Denda Keterlambatan')),
-                              DropdownMenuItem(value: 'lainnya', child: Text('➕ Pemasukan Lainnya')),
+                              DropdownMenuItem(
+                                value: 'sewa_kamar',
+                                child: Text('🏠 Sewa Kamar Tunai'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'deposit',
+                                child: Text('🛡️ Uang Jaminan / Deposit'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'denda',
+                                child: Text('⚠️ Denda Keterlambatan'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'lainnya',
+                                child: Text('➕ Pemasukan Lainnya'),
+                              ),
                             ],
                             onChanged: (val) {
                               if (val != null) {
@@ -603,30 +743,48 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
 
                       const Text(
                         'Nominal Uang Masuk (Rp)',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF334155),
+                        ),
                       ),
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: nominalController,
                         keyboardType: TextInputType.number,
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF059669)),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF059669),
+                        ),
                         decoration: InputDecoration(
                           prefixText: 'Rp ',
-                          prefixStyle: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF059669)),
+                          prefixStyle: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF059669),
+                          ),
                           hintText: 'Misal: 1500000',
                           filled: true,
                           fillColor: const Color(0xFFF8FAFC),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFE2E8F0),
+                            ),
                           ),
                         ),
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
                             return 'Nominal wajib diisi';
                           }
-                          final parsed = double.tryParse(value.replaceAll(RegExp(r'[^0-9]'), ''));
+                          final parsed = double.tryParse(
+                            value.replaceAll(RegExp(r'[^0-9]'), ''),
+                          );
                           if (parsed == null || parsed <= 0) {
                             return 'Nominal harus lebih dari Rp 0';
                           }
@@ -637,7 +795,11 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
 
                       const Text(
                         'Keterangan Transaksi',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF334155),
+                        ),
                       ),
                       const SizedBox(height: 8),
                       TextFormField(
@@ -647,10 +809,15 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                           hintText: 'Misal: Sewa Kamar 02 (Budi Santoso) bayar tunai di tempat',
                           filled: true,
                           fillColor: const Color(0xFFF8FAFC),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFE2E8F0),
+                            ),
                           ),
                         ),
                         validator: (value) {
@@ -674,14 +841,16 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
 
                                   final rawNominal = nominalController.text
                                       .replaceAll(RegExp(r'[^0-9.]'), '');
-                                  final nominal = double.tryParse(rawNominal) ?? 0.0;
+                                  final nominal =
+                                      double.tryParse(rawNominal) ?? 0.0;
                                   final resolvedKostId = widget.kostId ?? '';
 
                                   final success = await KosService.addIncome(
                                     kostId: resolvedKostId,
                                     kategori: selectedKategori,
                                     nominal: nominal,
-                                    keterangan: keteranganController.text.trim(),
+                                    keterangan: keteranganController.text
+                                        .trim(),
                                     tanggal: selectedDate,
                                   );
 
@@ -712,7 +881,11 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                                   ),
                                 )
                               : const Icon(Icons.check_rounded, size: 20),
-                          label: Text(isSubmitting ? 'Menyimpan...' : 'Simpan Pemasukan Kas'),
+                          label: Text(
+                            isSubmitting
+                                ? 'Menyimpan...'
+                                : 'Simpan Pemasukan Kas',
+                          ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF059669),
                             foregroundColor: Colors.white,
@@ -756,8 +929,13 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFDC2626)),
-            child: const Text('Ya, Hapus', style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+            ),
+            child: const Text(
+              'Ya, Hapus',
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -768,8 +946,14 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ok ? 'Mutasi kas berhasil dihapus.' : 'Gagal menghapus mutasi kas.'),
-            backgroundColor: ok ? const Color(0xFF059669) : const Color(0xFFDC2626),
+            content: Text(
+              ok
+                  ? 'Mutasi kas berhasil dihapus.'
+                  : 'Gagal menghapus mutasi kas.',
+            ),
+            backgroundColor: ok
+                ? const Color(0xFF059669)
+                : const Color(0xFFDC2626),
           ),
         );
         _fetchLedgerData();
@@ -829,7 +1013,10 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFEFF6FF),
                     borderRadius: BorderRadius.circular(6),
@@ -838,7 +1025,11 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.lock_rounded, size: 10, color: Color(0xFF1E40AF)),
+                      Icon(
+                        Icons.lock_rounded,
+                        size: 10,
+                        color: Color(0xFF1E40AF),
+                      ),
                       SizedBox(width: 3),
                       Text(
                         'Owner Only',
@@ -864,7 +1055,10 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
         actions: [
           IconButton(
             tooltip: 'Unduh Laporan PDF',
-            icon: const Icon(Icons.picture_as_pdf_rounded, color: Color(0xFF1E40AF)),
+            icon: const Icon(
+              Icons.picture_as_pdf_rounded,
+              color: Color(0xFF1E40AF),
+            ),
             onPressed: _exportPdfReport,
           ),
           IconButton(
@@ -887,14 +1081,20 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                       SizedBox(height: 12),
                       Text(
                         'Memuat buku kas dan transaksi riil...',
-                        style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                        style: TextStyle(
+                          color: Color(0xFF64748B),
+                          fontSize: 13,
+                        ),
                       ),
                     ],
                   ),
                 )
               : SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 16,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -953,7 +1153,11 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
               color: const Color(0xFFEFF6FF),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.date_range_rounded, color: Color(0xFF1E40AF), size: 20),
+            child: const Icon(
+              Icons.date_range_rounded,
+              color: Color(0xFF1E40AF),
+              size: 20,
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -962,7 +1166,11 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
               children: [
                 const Text(
                   'Periode Pembukuan',
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF64748B),
+                  ),
                 ),
                 Text(
                   _periodLabel,
@@ -992,7 +1200,11 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
           const SizedBox(width: 4),
           PopupMenuButton<String>(
             tooltip: 'Pilih Periode',
-            icon: const Icon(Icons.tune_rounded, color: Color(0xFF1E40AF), size: 20),
+            icon: const Icon(
+              Icons.tune_rounded,
+              color: Color(0xFF1E40AF),
+              size: 20,
+            ),
             onSelected: (val) {
               if (val == 'all') {
                 setState(() => _isAllPeriod = true);
@@ -1006,7 +1218,10 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                 final parts = val.split('-');
                 setState(() {
                   _isAllPeriod = false;
-                  _selectedPeriod = DateTime(int.parse(parts[0]), int.parse(parts[1]));
+                  _selectedPeriod = DateTime(
+                    int.parse(parts[0]),
+                    int.parse(parts[1]),
+                  );
                 });
               }
             },
@@ -1014,7 +1229,10 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
               final now = DateTime.now();
               return [
                 const PopupMenuItem(value: 'now', child: Text('📌 Bulan Ini')),
-                const PopupMenuItem(value: 'all', child: Text('🌐 Semua Periode (Akumulasi)')),
+                const PopupMenuItem(
+                  value: 'all',
+                  child: Text('🌐 Semua Periode (Akumulasi)'),
+                ),
                 const PopupMenuDivider(),
                 for (int i = 0; i < 6; i++) ...[
                   () {
@@ -1202,7 +1420,9 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
               foregroundColor: Colors.white,
               elevation: 0,
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
             ),
           ),
         ),
@@ -1211,7 +1431,11 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
           flex: 2,
           child: OutlinedButton.icon(
             onPressed: _showAddIncomeDialog,
-            icon: const Icon(Icons.add_rounded, size: 18, color: Color(0xFF059669)),
+            icon: const Icon(
+              Icons.add_rounded,
+              size: 18,
+              color: Color(0xFF059669),
+            ),
             label: const Text(
               '+ Kas Masuk',
               style: TextStyle(
@@ -1224,7 +1448,9 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
               side: const BorderSide(color: Color(0xFFA7F3D0), width: 1.2),
               backgroundColor: const Color(0xFFECFDF5),
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
             ),
           ),
         ),
@@ -1257,7 +1483,11 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
             children: [
               const Row(
                 children: [
-                  Icon(Icons.bar_chart_rounded, color: Color(0xFF1E40AF), size: 22),
+                  Icon(
+                    Icons.bar_chart_rounded,
+                    color: Color(0xFF1E40AF),
+                    size: 22,
+                  ),
                   SizedBox(width: 8),
                   Text(
                     'Visualisasi Arus Kas (Bar Chart)',
@@ -1335,7 +1565,7 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 4,
-                  )
+                  ),
                 ]
               : null,
         ),
@@ -1344,7 +1574,9 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
           style: TextStyle(
             fontSize: 11,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-            color: isSelected ? const Color(0xFF1E40AF) : const Color(0xFF64748B),
+            color: isSelected
+                ? const Color(0xFF1E40AF)
+                : const Color(0xFF64748B),
           ),
         ),
       ),
@@ -1366,7 +1598,11 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
         const SizedBox(width: 6),
         Text(
           label,
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF475569),
+          ),
         ),
       ],
     );
@@ -1376,7 +1612,10 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
   Widget _buildComparisonBarChart(CashLedgerSummary summary) {
     final double maxVal = math.max(
       summary.totalPemasukan,
-      math.max(summary.totalPengeluaran, summary.labaBersih > 0 ? summary.labaBersih : 0),
+      math.max(
+        summary.totalPengeluaran,
+        summary.labaBersih > 0 ? summary.labaBersih : 0,
+      ),
     );
 
     if (maxVal == 0) {
@@ -1500,12 +1739,18 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
 
     for (int i = 5; i >= 0; i--) {
       final mDate = DateTime(now.year, now.month - i);
-      final monthLedgers = _allLedgers.where((l) =>
-          l.tanggal.year == mDate.year && l.tanggal.month == mDate.month).toList();
+      final monthLedgers = _allLedgers
+          .where(
+            (l) =>
+                l.tanggal.year == mDate.year && l.tanggal.month == mDate.month,
+          )
+          .toList();
 
       final summary = CashLedgerSummary.fromLedgers(monthLedgers);
-      if (summary.totalPemasukan > overallMax) overallMax = summary.totalPemasukan;
-      if (summary.totalPengeluaran > overallMax) overallMax = summary.totalPengeluaran;
+      if (summary.totalPemasukan > overallMax)
+        overallMax = summary.totalPemasukan;
+      if (summary.totalPengeluaran > overallMax)
+        overallMax = summary.totalPengeluaran;
 
       monthlyData.add({
         'label': _monthNames[mDate.month - 1].substring(0, 3),
@@ -1542,7 +1787,9 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                     height: incH,
                     decoration: BoxDecoration(
                       color: const Color(0xFF059669),
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(4),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 4),
@@ -1552,7 +1799,9 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                     height: expH,
                     decoration: BoxDecoration(
                       color: const Color(0xFFDC2626),
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(4),
+                      ),
                     ),
                   ),
                 ],
@@ -1560,7 +1809,11 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
               const SizedBox(height: 8),
               Text(
                 label,
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF475569),
+                ),
               ),
             ],
           );
@@ -1594,7 +1847,11 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
         children: [
           const Row(
             children: [
-              Icon(Icons.donut_large_rounded, color: Color(0xFFDC2626), size: 22),
+              Icon(
+                Icons.donut_large_rounded,
+                color: Color(0xFFDC2626),
+                size: 22,
+              ),
               SizedBox(width: 8),
               Text(
                 'Komposisi Pengeluaran Operasional',
@@ -1619,11 +1876,19 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
               alignment: Alignment.center,
               child: Column(
                 children: [
-                  Icon(Icons.receipt_long_outlined, size: 40, color: Colors.grey.shade400),
+                  Icon(
+                    Icons.receipt_long_outlined,
+                    size: 40,
+                    color: Colors.grey.shade400,
+                  ),
                   const SizedBox(height: 10),
                   const Text(
                     'Belum Ada Pengeluaran di Periode Ini',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF334155)),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: Color(0xFF334155),
+                    ),
                   ),
                   const SizedBox(height: 4),
                   const Text(
@@ -1734,7 +1999,9 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                               value: pct / 100,
                               minHeight: 5,
                               backgroundColor: const Color(0xFFF1F5F9),
-                              valueColor: AlwaysStoppedAnimation<Color>(categoryModel.kategoriColor),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                categoryModel.kategoriColor,
+                              ),
                             ),
                           ),
                         ],
@@ -1797,7 +2064,11 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.receipt_long_rounded, color: Color(0xFF1E40AF), size: 22),
+                        const Icon(
+                          Icons.receipt_long_rounded,
+                          color: Color(0xFF1E40AF),
+                          size: 22,
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           'Riwayat Mutasi Buku Kas (${ledgers.length})',
@@ -1811,7 +2082,10 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                     ),
                     if (widget.isJuragan)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFFFEF3C7),
                           borderRadius: BorderRadius.circular(8),
@@ -1819,7 +2093,11 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                         ),
                         child: const Text(
                           '⭐ Juragan Audit',
-                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF92400E)),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF92400E),
+                          ),
                         ),
                       ),
                   ],
@@ -1832,7 +2110,11 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
                     hintText: 'Cari catatan mutasi, nomor kamar, atau nota...',
-                    prefixIcon: const Icon(Icons.search_rounded, size: 20, color: Color(0xFF64748B)),
+                    prefixIcon: const Icon(
+                      Icons.search_rounded,
+                      size: 20,
+                      color: Color(0xFF64748B),
+                    ),
                     suffixIcon: _searchController.text.isNotEmpty
                         ? IconButton(
                             icon: const Icon(Icons.clear_rounded, size: 18),
@@ -1881,11 +2163,19 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
               child: Center(
                 child: Column(
                   children: [
-                    Icon(Icons.inventory_2_outlined, size: 44, color: Colors.grey.shade400),
+                    Icon(
+                      Icons.inventory_2_outlined,
+                      size: 44,
+                      color: Colors.grey.shade400,
+                    ),
                     const SizedBox(height: 10),
                     const Text(
                       'Tidak Ditemukan Mutasi Kas',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF334155)),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: Color(0xFF334155),
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -1893,7 +2183,10 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                           ? 'Tidak ada transaksi dengan kata kunci "${_searchController.text}".'
                           : 'Belum ada transaksi pada periode $_periodLabel.',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: Color(0xFF64748B),
+                      ),
                     ),
                   ],
                 ),
@@ -1904,8 +2197,11 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: ledgers.length,
-              separatorBuilder: (context, index) =>
-                  const Divider(height: 1, indent: 64, color: Color(0xFFF1F5F9)),
+              separatorBuilder: (context, index) => const Divider(
+                height: 1,
+                indent: 64,
+                color: Color(0xFFF1F5F9),
+              ),
               itemBuilder: (context, index) {
                 final item = ledgers[index];
                 return _buildLedgerTile(item);
@@ -1938,7 +2234,9 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
 
   Widget _buildLedgerTile(CashLedgerModel item) {
     final isMasuk = item.isMasuk;
-    final primaryColor = isMasuk ? const Color(0xFF059669) : const Color(0xFFDC2626);
+    final primaryColor = isMasuk
+        ? const Color(0xFF059669)
+        : const Color(0xFFDC2626);
     final bgColor = isMasuk ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2);
 
     return InkWell(
@@ -1952,10 +2250,7 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
             Container(
               width: 40,
               height: 40,
-              decoration: BoxDecoration(
-                color: bgColor,
-                shape: BoxShape.circle,
-              ),
+              decoration: BoxDecoration(color: bgColor, shape: BoxShape.circle),
               child: Icon(item.kategoriIcon, color: primaryColor, size: 20),
             ),
             const SizedBox(width: 12),
@@ -1966,7 +2261,9 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    item.keterangan.isNotEmpty ? item.keterangan : item.kategoriLabel,
+                    item.keterangan.isNotEmpty
+                        ? item.keterangan
+                        : item.kategoriLabel,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -1979,7 +2276,10 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: item.kategoriColor.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(4),
@@ -1996,7 +2296,10 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                       const SizedBox(width: 6),
                       Text(
                         FormatUtils.formatDate(item.tanggal),
-                        style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B)),
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          color: Color(0xFF64748B),
+                        ),
                       ),
                     ],
                   ),
@@ -2019,9 +2322,16 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                 ),
                 if (!isMasuk)
                   IconButton(
-                    icon: const Icon(Icons.delete_outline_rounded, size: 16, color: Color(0xFF94A3B8)),
+                    icon: const Icon(
+                      Icons.delete_outline_rounded,
+                      size: 16,
+                      color: Color(0xFF94A3B8),
+                    ),
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                    constraints: const BoxConstraints(
+                      minWidth: 24,
+                      minHeight: 24,
+                    ),
                     tooltip: 'Hapus Nota',
                     onPressed: () => _confirmDeleteLedger(item),
                   ),
@@ -2041,8 +2351,12 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
         title: Row(
           children: [
             Icon(
-              item.isMasuk ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
-              color: item.isMasuk ? const Color(0xFF059669) : const Color(0xFFDC2626),
+              item.isMasuk
+                  ? Icons.arrow_downward_rounded
+                  : Icons.arrow_upward_rounded,
+              color: item.isMasuk
+                  ? const Color(0xFF059669)
+                  : const Color(0xFFDC2626),
             ),
             const SizedBox(width: 8),
             Text(
@@ -2055,7 +2369,11 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildDetailRow('Nominal', '${item.isMasuk ? "+ " : "- "}${FormatUtils.rupiah(item.nominal)}', isBold: true),
+            _buildDetailRow(
+              'Nominal',
+              '${item.isMasuk ? "+ " : "- "}${FormatUtils.rupiah(item.nominal)}',
+              isBold: true,
+            ),
             _buildDetailRow('Kategori', item.kategoriLabel),
             _buildDetailRow('Tanggal', FormatUtils.formatDate(item.tanggal)),
             _buildDetailRow('Keterangan', item.keterangan),
@@ -2072,8 +2390,15 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
                 Navigator.pop(ctx);
                 _confirmDeleteLedger(item);
               },
-              icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFDC2626), size: 16),
-              label: const Text('Hapus Mutasi', style: TextStyle(color: Color(0xFFDC2626))),
+              icon: const Icon(
+                Icons.delete_outline_rounded,
+                color: Color(0xFFDC2626),
+                size: 16,
+              ),
+              label: const Text(
+                'Hapus Mutasi',
+                style: TextStyle(color: Color(0xFFDC2626)),
+              ),
             ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx),
@@ -2123,10 +2448,7 @@ class _DonutChartPainter extends CustomPainter {
   final Map<String, double> data;
   final double total;
 
-  _DonutChartPainter({
-    required this.data,
-    required this.total,
-  });
+  _DonutChartPainter({required this.data, required this.total});
 
   @override
   void paint(Canvas canvas, Size size) {
