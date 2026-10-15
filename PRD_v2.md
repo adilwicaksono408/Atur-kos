@@ -201,13 +201,18 @@ sequenceDiagram
 
 ---
 
-### 6.3 Modul 3: Manajemen Kamar, Kuota Paket & Penghuni
+### 6.3 Modul 3: Manajemen Kamar, Kuota Paket & Penghuni (Termasuk KYC Identitas)
 * **Master Inventaris Kamar:**
   * Nomor kamar, tipe kamar, harga bulanan, daftar fasilitas (array), dan foto kamar.
   * Siklus status kamar: `kosong`, `terisi`, `akan_kosong`, `perbaikan`.
 * **Validasi Kuota Kamar Berdasarkan Paket:**
   * Jika `subscription_tier == 'starter'` dan jumlah kamar saat ini $\ge 5$, sistem mengunci tombol "Tambah Kamar" dan menampilkan modal ajakan upgrade ke Paket Juragan.
   * Jika `subscription_tier == 'juragan'`, kuota kamar aktif terbuka hingga 25 kamar.
+* **Verifikasi Legalitas Identitas Penghuni & Kontak Darurat (KYC Tenant):**
+  * **Input Data KTP:** Penghuni wajib mengisi NIK KTP (16 digit) dan mengunggah foto dokumen KTP resmi melalui menu profil dasbor penghuni.
+  * **Perlindungan Privasi NIK (*Masked NIK*):** Di layar antarmuka, NIK disensor otomatis (contoh: `3201**********34`) untuk menjaga privasi data pribadi.
+  * **Kontak Darurat (Emergency Contact):** Penghuni wajib mencantumkan Nama Wali/Keluarga Terdekat dan Nomor WhatsApp aktif yang dapat dihubungi saat terjadi keadaan darurat (sakit, kecelakaan, atau kendala mendadak).
+  * **Inspeksi Identitas oleh Pemilik:** Pemilik kos dapat melihat lencana status KTP (*KTP Verified / No KTP*) dan membuka modal pratinjau foto KTP serta nomor kontak darurat saat proses alokasi kamar sewa.
 * **Alokasi Kamar (Check-In & Check-Out):**
   * Relasi 1 kamar ke 1 penyewa aktif.
   * Mencatat tanggal mulai sewa, tanggal siklus jatuh tempo bulanan, dan tanggal berakhir sewa.
@@ -406,6 +411,12 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     role user_role NOT NULL DEFAULT 'tenant',
     avatar_url TEXT,
     fcm_token TEXT,
+    -- Identitas Legalitas Penghuni & Kontak Darurat (KYC Tenant)
+    nik_ktp VARCHAR(20),
+    dokumen_ktp_url TEXT,
+    kontak_darurat_nama VARCHAR(100),
+    kontak_darurat_wa VARCHAR(20),
+    status_identitas VARCHAR(30) DEFAULT 'unverified',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );

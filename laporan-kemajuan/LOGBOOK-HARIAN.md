@@ -180,5 +180,96 @@ Setiap entri harian berisi **hasil nyata (deliverables)** yang selesai dikerjaka
   * File Diperbarui: `kos_service.dart`, `kos_settings_screen.dart`, `owner_dashboard_screen.dart`, `LOGBOOK-HARIAN.md`
   * Validasi Linter: `flutter analyze` exit code 0 (No issues found!).
 
+---
+
+## 📅 Rabu, 14 Oktober 2026 (Studio Variasi Foto Kamar Riil AI & Generator Poster - Modul 7)
+
+### 1. Kemajuan Project (Atur Kos)
+* **Ringkasan Status:**
+  * Modul 7 (Poster Pemasaran & Mitigasi H-30): **BERJALAN** (Generator Foto Kamar Riil AI & Ekspor Poster Selesai 100%)
+  * Validasi Kode Flutter: **Stabil & Bersih** (`flutter analyze` exit code 0, No issues found!)
+
+* **Rincian Capaian:**
+  * **A. Arsitektur Backend & Database Kuota AI ([supabase_ai_poster_quota.sql](file:///d:/Atur%20kos/supabase_ai_poster_quota.sql)):**
+    * Penambahan kolom kuota AI pada tabel `kosts`: `ai_credits_monthly_quota` (Juragan: 30x/bln, Starter: 3x uji coba), `ai_credits_used_this_month`, dan `ai_credits_reset_at`.
+    * Pembuatan tabel riwayat generasi `ai_room_generations` untuk audit data dan riwayat foto per kamar.
+    * Pembuatan Stored Procedure / RPC `check_and_deduct_ai_credit` dengan keamanan transaksi atomik dan reset siklus bulanan otomatis.
+    * Konfigurasi Storage Bucket `ai-room-variations` dengan RLS terproteksi untuk menampung aset foto olahan AI.
+  * **B. Supabase Edge Function ([generate-room-variation/index.ts](file:///d:/Atur%20kos/supabase/functions/generate-room-variation/index.ts)):**
+    * Mengimplementasikan endpoint serverless berbasis Deno/TypeScript yang menjaga keamanan API Key di sisi server.
+    * Integrasi Image-to-Image (*Interior Design / Staging*) dengan parameter `strength: 0.45` yang mempertahankan struktur fisik dinding, pintu, dan jendela asli kamar tanpa manipulasi tata letak.
+    * Menyediakan 4 Preset Vibe: `warm_cozy`, `modern_minimalist`, `bright_daylight`, dan `clean_aesthetic`.
+    * Dilengkapi fitur **Sandbox Mode** otomatis untuk pengujian lokal/staging tanpa ketergantungan API berbayar saat development.
+  * **C. Antarmuka Studio Poster & Variasi AI Flutter ([room_poster_generator_screen.dart](file:///d:/Atur%20kos/atur_kos/lib/screens/owner/room_poster_generator_screen.dart)):**
+    * **Kartu Kuota AI Interaktif:** Menampilkan status sisa kuota bulanan kos secara visual.
+    * **Pengunggah Foto Kamar Riil:** Menggunakan `image_picker` (kamera & galeri) yang langsung menyimpan foto ke database kamar dan Supabase Storage.
+    * **Selector Preset Gaya AI:** 4 kartu preset horizontal dengan ikon, warna aksen, dan deskripsi gaya visual.
+    * **Komparasi Before vs After:** Tampilan komparasi foto asli vs foto hasil olahan AI, lengkap dengan toggle pemilih foto mana yang ingin diaktifkan di kanvas poster.
+    * **Kanvas Poster Promosi Dinamis:** Foto kamar (asli/AI) dirender sebagai latar utama bergradasi elegan, dilengkapi badge eksklusif "AI Enhanced" / "Foto Asli", nama kos, tipe & harga kamar, tag fasilitas, serta tombol kontak WhatsApp. Mendukung rasio 1:1 (Instagram Feed) dan 9:16 (WhatsApp/IG Story).
+    * **Ekspor Gambar Resolusi Tinggi:** Menggunakan `RepaintBoundary` untuk mengekspor poster menjadi gambar PNG tajam (3x HD) siap bagikan ke WhatsApp dan Instagram.
+  * **D. Penyempurnaan AI Natural Touch-up (Iterasi Feedback: Anti Foto Berlebihan / Clickbait):**
+    * Menghapus seluruh aset foto hotel mewah fiktif agar tidak menyesatkan calon penyewa kos (*anti-catfishing*).
+    * Menjamin 100% foto asli kamar milik pemilik kos (`foto_url`) dipertahankan secara utuh sebagai gambar utama di kanvas poster.
+    * Menyediakan preset **"Foto Asli Mentah"** (`raw_natural`) bagi pemilik yang ingin menggunakan 100% foto jepretan kamera HP apa adanya tanpa filter dan tanpa memotong kuota.
+    * Menyesuaikan matriks pencahayaan AI agar hanya menaikkan kecerahan (exposure +4 s/d 8%) pada kamar remang secara alami dan lembut tanpa mengubah warna asli sprei, kasur, atau perabotan.
+    * Memperbarui tata letak gradasi kanvas poster: gradasi hanya berada di bagian atas dan bawah (scrim), membiarkan area tengah foto kamar 100% terang dan jernih terlihat nyata.
+    * Menghilangkan peringatan linter (`flutter analyze` 100% bersih tanpa warning/error).
+
+* **Bukti/Artefak:**
+  * File Baru: [supabase_ai_poster_quota.sql](file:///d:/Atur%20kos/supabase_ai_poster_quota.sql), [generate-room-variation/index.ts](file:///d:/Atur%20kos/supabase/functions/generate-room-variation/index.ts)
+  * File Diperbarui: [room_poster_generator_screen.dart](file:///d:/Atur%20kos/atur_kos/lib/screens/owner/room_poster_generator_screen.dart), [kos_service.dart](file:///d:/Atur%20kos/atur_kos/lib/services/kos_service.dart), [PROGRESS-PROJECT.md](file:///d:/Atur%20kos/laporan-kemajuan/PROGRESS-PROJECT.md), [LOGBOOK-HARIAN.md](file:///d:/Atur%20kos/laporan-kemajuan/LOGBOOK-HARIAN.md)
+  * Validasi: `flutter analyze` exit code 0 (No issues found!).
+
+---
+
+## 📅 Kamis, 15 Oktober 2026 (Integrasi Kuitansi Sah & Transparansi Gateway Midtrans Pemilik Kos - Modul 4)
+
+### 1. Kemajuan Project (Atur Kos)
+* **Ringkasan Status:**
+  * Modul 4 (Smart Billing & Midtrans Gateway): **BERJALAN** (Integrasi Transparansi Midtrans & Kuitansi QR Pemilik Selesai 100%)
+  * Validasi Linter Flutter: **Stabil & Bersih** (`flutter analyze` exit code 0, No issues found!)
+
+* **Rincian Capaian:**
+  * **A. Perluasan Query Transaksi Midtrans di Layanan ([kos_service.dart](file:///d:/Atur%20kos/atur_kos/lib/services/kos_service.dart)):**
+    * Memperbarui metode `getInvoices` untuk mengambil seluruh kolom transaksi Midtrans nyata: `order_id`, `payment_type`, `midtrans_transaction_id`, `transaction_time`, `settlement_time`, `qr_verification_code`, serta data kontak WhatsApp penghuni (`profiles.nomor_wa`).
+  * **B. Pembedaan Visual Status Tagihan di Dasbor Pemilik ([invoice_management_screen.dart](file:///d:/Atur%20kos/atur_kos/lib/screens/owner/invoice_management_screen.dart)):**
+    * Tagihan yang lunas otomatis melalui payment gateway kini ditandai dengan badge khusus bernuansa teal: **`LUNAS (Midtrans Snap)`** dengan ikon petir `Icons.bolt_rounded`, membedakannya dari **`LUNAS (Transfer Manual)`**.
+    * Kartu tagihan Midtrans menampilkan kotak informasi terverifikasi: channel pembayaran (QRIS / Bank Virtual Account), nomor Order ID resmi, ID Transaksi Midtrans (`midtrans_transaction_id`), dan waktu pelunasan presisi.
+  * **C. Akses Kuitansi Sah Digital Ber-QR Code Anti-Manipulasi untuk Pemilik:**
+    * Menyediakan tombol aksi utama **"Kuitansi Sah (QR)"** pada setiap tagihan yang telah lunas.
+    * Pemilik dapat membuka modal kuitansi digital resmi berstandar ISO/IEC 18004 lengkap dengan segel QR code asli yang dapat dipindai oleh Google Lens / kamera HP untuk membuktikan keabsahan pelunasan.
+  * **D. Otomasi Distribusi Kuitansi via WhatsApp (PRD US-4.4):**
+    * Menambahkan tombol **"Kirim WA"** dengan template pesan resmi yang menyertakan rincian pembayaran, nomor order, metode Midtrans, dan tautan verifikasi segel anti-manipulasi kuitansi, memudahkan pemilik mengirimkan bukti ke penyewa atau orang tua penyewa dalam 1-klik.
+  * **E. Banner Statistik Otomasi pada Tab Lunas:**
+    * Tab Lunas dilengkapi banner ringkasan interaktif yang menampilkan jumlah tagihan yang terverifikasi otomatis via Midtrans tanpa perlu pengecekan rekening manual oleh pemilik kos.
+  * **F. Panel Pendapatan Langganan SaaS Pemilik & Audit Midtrans Super Admin ([super_admin_dashboard_screen.dart](file:///d:/Atur%20kos/atur_kos/lib/screens/admin/super_admin_dashboard_screen.dart)):**
+    * **Kepatuhan Privasi Transaksional & Multi-Tenant:** Menerapkan pemisahan hak akses tegas (*Data Minimization & UU PDP*). Super Admin tidak mengintip sewa kamar privat anak kos, namun berfokus mengaudit pendapatan B2B platform Atur Kos (langganan Paket Juragan Rp 50.000/bln atau Rp 500.000/thn).
+    * **Tab ke-5 Terdedikasi:** Menambahkan tab `⭐ Langganan SaaS & Midtrans` dengan kartu statistik interaktif yang dapat diklik langsung untuk berpindah tab secara responsif.
+    * **Kartu KPI Finansial Platform:**
+      * Monthly Recurring Revenue (MRR): Proyeksi pendapatan bulanan platform berbasis properti Juragan aktif.
+      * Annual Recurring Revenue (ARR): Proyeksi pendapatan tahunan (MRR x 12).
+      * Rasio Konversi Freemium: Persentase properti Starter yang berhasil di-upsell ke Paket Juragan.
+      * Status Gateway Midtrans Sandbox: Status koneksi aktif dengan saluran pembayaran QRIS dan 6 Bank Virtual Account (BCA, Mandiri, BNI, BRI, Permata, CIMB).
+    * **Simulasi Transaksi Sandbox Terintegrasi:** Tombol `⚡ Simulasi Midtrans Sandbox` dan `Simulasi Bayar Midtrans` pada setiap kartu properti, memungkinkan pengujian langsung simulasi pembayaran Snap Sandbox tanpa perlu login sebagai pemilik kos. Mutasi database `tier` dan `subscription_expires_at` tercatat nyata secara instan.
+    * **Ekspor Laporan Finansial Siap Skripsi (Bab IV):** Tombol `📋 Salin Laporan (Bab IV)` yang menyusun ringkasan metrik finansial, daftar kos berbayar aktif, dan kelayakan audit gateway ke clipboard dalam 1-klik untuk bahan evaluasi bisnis skripsi.
+
+  * **G. Layar Verifikasi Publik Kuitansi Digital Ber-QR Code Anti-Fraud Bebas Login ([public_receipt_verification_screen.dart](file:///d:/Atur%20kos/atur_kos/lib/screens/payment/public_receipt_verification_screen.dart)):**
+    * **Verifikasi Independen Tanpa Login (PRD US-4.3 & US-4.4):** Siapapun pemegang kuitansi (penghuni, orang tua, bagian beasiswa kampus, auditor, pemilik) dapat memeriksa keabsahan transaksi Midtrans langsung tanpa perlu mendaftar atau login ke aplikasi.
+    * **Pencarian Cerdas Multi-Format:** Menerima input nomor Order ID (`INV-202610...`), kode segel verifikasi QR (`ATURKOS-...`), maupun tautan URL lengkap verifikasi (`https://aturkos.app/verify/invoice?...`).
+    * **Chip Uji Coba Cepat (Demo-Ready):** Menyediakan chip sampel tagihan lunas terbaru langsung dari database Supabase (`getSampleSettledInvoicesForDemo`), memungkinkan penguji skripsi menguji verifikasi instan dengan 1-klik tanpa perlu mengetik manual.
+    * **Sertifikat Digital Otentik & Segel Emas:** Menampilkan kartu verifikasi bergradasi dengan segel "VERIFIED BY MIDTRANS SNAP", waktu pelunasan presisi, alokasi nomor kamar, nama properti kos, alamat, nama penghuni, dan metode pembayaran resmi.
+    * **QR Code Dinamis Berstandar ISO/IEC 18004:** Merender QR Code hidup via `QrImageView` dengan rasio kontras tinggi, siap dipindai kamera perangkat lain untuk pengujian verifikasi silang mandiri.
+    * **Proteksi Anti-Manipulasi & Anti-Fraud:** Memberikan deteksi tegas dan tampilan peringatan merah jika kuitansi tidak terdaftar, belum lunas, atau palsu.
+    * **Format Cetak Fisik & Bagikan ke WhatsApp:** Tombol "Cetak / Simpan Kuitansi" untuk pratinjau lembar kuitansi resmi berstempel dan tombol "Bagikan ke WhatsApp" dengan teks verifikasi terformat rapi.
+    * **Titik Akses Terintegrasi:** Terpasang di footer [welcome_screen.dart](file:///d:/Atur%20kos/atur_kos/lib/screens/auth/welcome_screen.dart) ("Cek Keabsahan Kuitansi Digital — Tanpa Login"), modal kuitansi penghuni [midtrans_tenant_payment_dialog.dart](file:///d:/Atur%20kos/atur_kos/lib/screens/payment/midtrans_tenant_payment_dialog.dart), dan lembar kuitansi pemilik kos [invoice_management_screen.dart](file:///d:/Atur%20kos/atur_kos/lib/screens/owner/invoice_management_screen.dart).
+    * **Keamanan Database PostgreSQL RPC ([supabase_verify_receipt_rpc.sql](file:///d:/Atur%20kos/supabase_verify_receipt_rpc.sql)):** Fungsi `verify_receipt_public(p_code text)` dengan hak `SECURITY DEFINER` yang diizinkan untuk peran `anon` (publik tanpa login) dan `authenticated`, dengan filter pencocokan kode eksak guna mencegah *data harvesting/enumeration* sesuai UU PDP.
+
+* **Bukti/Artefak:**
+  * File Baru: [public_receipt_verification_screen.dart](file:///d:/Atur%20kos/atur_kos/lib/screens/payment/public_receipt_verification_screen.dart), [supabase_verify_receipt_rpc.sql](file:///d:/Atur%20kos/supabase_verify_receipt_rpc.sql)
+  * File Diperbarui: [kos_service.dart](file:///d:/Atur%20kos/atur_kos/lib/services/kos_service.dart), [welcome_screen.dart](file:///d:/Atur%20kos/atur_kos/lib/screens/auth/welcome_screen.dart), [midtrans_tenant_payment_dialog.dart](file:///d:/Atur%20kos/atur_kos/lib/screens/payment/midtrans_tenant_payment_dialog.dart), [invoice_management_screen.dart](file:///d:/Atur%20kos/atur_kos/lib/screens/owner/invoice_management_screen.dart), [super_admin_dashboard_screen.dart](file:///d:/Atur%20kos/atur_kos/lib/screens/admin/super_admin_dashboard_screen.dart), [PROGRESS-PROJECT.md](file:///d:/Atur%20kos/laporan-kemajuan/PROGRESS-PROJECT.md), [LOGBOOK-HARIAN.md](file:///d:/Atur%20kos/laporan-kemajuan/LOGBOOK-HARIAN.md)
+  * Validasi Linter: `flutter analyze` 100% exit code 0 (No issues found! pada seluruh project `atur_kos`).
+
+
+
 
 

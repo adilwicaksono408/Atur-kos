@@ -5,7 +5,7 @@ import 'package:atur_kos/services/kos_service.dart';
 import 'package:atur_kos/screens/payment/midtrans_snap_payment_dialog.dart';
 
 /// Halaman Manajemen Inventaris Kamar Kos (CRUD Kamar)
-/// Pemilik dapat menambah kamar baru secara manual atau menggunakan template preset default.
+/// Pemilik dapat menambah kamar baru secara manual atau menggunakan template kamar standar.
 class RoomManagementScreen extends StatefulWidget {
   final String? kostId;
   final String kosName;
@@ -82,7 +82,7 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
                         style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                       ),
                       Text(
-                        'Buka kuota hingga 25 kamar & fitur otomasi penuh',
+                        'Akses kamar tanpa batas & fitur otomasi penuh',
                         style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
                       ),
                     ],
@@ -112,7 +112,7 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
                   // Fitur Paket Juragan
                   const Text('Keuntungan Paket Juragan:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                   const SizedBox(height: 8),
-                  _buildFeatureRow('Kuota kamar terbuka hingga 25 kamar'),
+                  _buildFeatureRow('Akses kamar tanpa batas (Unlimited kamar)'),
                   _buildFeatureRow('Pengingat WhatsApp Otomatis (Protokol Anti-Ban)'),
                   _buildFeatureRow('AI Marketing Poster Generator (Format 1:1 & 9:16)'),
                   _buildFeatureRow('Deteksi Mitigasi Kamar Kosong H-30'),
@@ -345,8 +345,9 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
   // Dialog Tambah Kamar Baru
   void _showAddRoomDialog() {
     // Validasi kuota paket sebelum membuka form (PRD v2.0.0 Modul 3)
+    final isUnlimited = _kostModel?.hasUnlimitedRooms ?? false;
     final maxRooms = _kostModel?.maxRooms ?? 5;
-    if (_rooms.length >= maxRooms) {
+    if (!isUnlimited && _rooms.length >= maxRooms) {
       _showUpgradeDialog();
       return;
     }
@@ -583,10 +584,11 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
     );
   }
 
-  // Pasang Kamar Preset Default Kos (10 Kamar Siap Pakai)
+  // Pasang Kamar Template Standar (5 Kamar Siap Pakai)
   Future<void> _populateDefaultPresetRooms() async {
+    final isUnlimited = _kostModel?.hasUnlimitedRooms ?? false;
     final maxAllowed = _kostModel?.maxRooms ?? 5;
-    if (_rooms.length + 10 > maxAllowed) {
+    if (!isUnlimited && _rooms.length + 5 > maxAllowed) {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -599,7 +601,7 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
             ],
           ),
           content: Text(
-            'Preset contoh ini menyediakan 10 kamar, namun Paket Starter Anda hanya mendukung maksimal $maxAllowed kamar.\n\nSilakan upgrade ke Paket Juragan (kuota hingga 25 kamar) untuk memasang seluruh kamar contoh ini.',
+            'Template contoh ini menyediakan 5 kamar, namun kuota kamar aktif Paket Starter Anda tersisa ${_rooms.length}/$maxAllowed kamar.\n\nSilakan upgrade ke Paket Juragan untuk mendapatkan akses kamar tanpa batas.',
             style: const TextStyle(fontSize: 13, color: Color(0xFF334155), height: 1.45),
           ),
           actions: [
@@ -627,16 +629,16 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Pasang Preset Kamar Kos Princess?'),
+        title: const Text('Pasang Template Kamar Standar?'),
         content: const Text(
-          'Sistem akan otomatis membuat 10 kamar contoh Kos Princess (Kamar 01 s/d 10) lengkap dengan harga dan fasilitas default.',
+          'Sistem akan otomatis membuat 5 kamar contoh standar (Kamar 101 s/d 105) lengkap dengan harga dan fasilitas umum.',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E40AF)),
-            child: const Text('Pasang Preset', style: TextStyle(color: Colors.white)),
+            child: const Text('Pasang Template', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -647,16 +649,11 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
     setState(() => _isLoading = true);
 
     final defaultRooms = [
-      {'no': 'Kamar 01', 'tipe': 'Standard', 'harga': 1250000.0, 'status': 'terisi'},
-      {'no': 'Kamar 02', 'tipe': 'Standard', 'harga': 1250000.0, 'status': 'kosong'},
-      {'no': 'Kamar 03', 'tipe': 'Standard', 'harga': 1250000.0, 'status': 'terisi'},
-      {'no': 'Kamar 04', 'tipe': 'Deluxe', 'harga': 1500000.0, 'status': 'kosong'},
-      {'no': 'Kamar 05', 'tipe': 'Deluxe', 'harga': 1500000.0, 'status': 'terisi'},
-      {'no': 'Kamar 06', 'tipe': 'Deluxe', 'harga': 1500000.0, 'status': 'kosong'},
-      {'no': 'Kamar 07', 'tipe': 'VIP', 'harga': 1800000.0, 'status': 'terisi'},
-      {'no': 'Kamar 08', 'tipe': 'VIP', 'harga': 1800000.0, 'status': 'akan_kosong'},
-      {'no': 'Kamar 09', 'tipe': 'Standard', 'harga': 1250000.0, 'status': 'kosong'},
-      {'no': 'Kamar 10', 'tipe': 'Standard', 'harga': 1250000.0, 'status': 'perbaikan'},
+      {'no': 'Kamar 101', 'tipe': 'Standard', 'harga': 1200000.0, 'status': 'kosong'},
+      {'no': 'Kamar 102', 'tipe': 'Standard', 'harga': 1200000.0, 'status': 'kosong'},
+      {'no': 'Kamar 103', 'tipe': 'Standard', 'harga': 1200000.0, 'status': 'kosong'},
+      {'no': 'Kamar 104', 'tipe': 'Deluxe', 'harga': 1500000.0, 'status': 'kosong'},
+      {'no': 'Kamar 105', 'tipe': 'VIP', 'harga': 1800000.0, 'status': 'kosong'},
     ];
 
     for (var r in defaultRooms) {
@@ -673,7 +670,7 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('10 Kamar preset Kos Princess berhasil dipasang!'),
+          content: Text('5 Kamar template standar berhasil dipasang!'),
           backgroundColor: Color(0xFF059669),
           behavior: SnackBarBehavior.floating,
         ),
@@ -746,11 +743,15 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            '(${_rooms.length} / ${_kostModel?.maxRooms ?? 5} Kamar)',
+                            (_kostModel?.hasUnlimitedRooms ?? false)
+                                ? '(${_rooms.length} Kamar • Tanpa Batas ♾️)'
+                                : '(${_rooms.length} / ${_kostModel?.maxRooms ?? 5} Kamar)',
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
-                              color: _rooms.length >= (_kostModel?.maxRooms ?? 5) ? Colors.red.shade700 : const Color(0xFF64748B),
+                              color: (!(_kostModel?.hasUnlimitedRooms ?? false) && _rooms.length >= (_kostModel?.maxRooms ?? 5))
+                                  ? Colors.red.shade700
+                                  : const Color(0xFF64748B),
                             ),
                           ),
                         ],
@@ -759,13 +760,19 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
                       ClipRRect(
                         borderRadius: BorderRadius.circular(4),
                         child: LinearProgressIndicator(
-                          value: (_kostModel?.maxRooms ?? 5) > 0
-                              ? (_rooms.length / (_kostModel?.maxRooms ?? 5)).clamp(0.0, 1.0)
-                              : 0.0,
-                          backgroundColor: const Color(0xFFCBD5E1),
-                          color: _rooms.length >= (_kostModel?.maxRooms ?? 5)
-                              ? Colors.red.shade600
-                              : const Color(0xFF2563EB),
+                          value: (_kostModel?.hasUnlimitedRooms ?? false)
+                              ? 1.0
+                              : ((_kostModel?.maxRooms ?? 5) > 0
+                                  ? (_rooms.length / (_kostModel?.maxRooms ?? 5)).clamp(0.0, 1.0)
+                                  : 0.0),
+                          backgroundColor: (_kostModel?.hasUnlimitedRooms ?? false)
+                              ? const Color(0xFFDBEAFE)
+                              : const Color(0xFFCBD5E1),
+                          color: (_kostModel?.hasUnlimitedRooms ?? false)
+                              ? const Color(0xFF2563EB)
+                              : (_rooms.length >= (_kostModel?.maxRooms ?? 5)
+                                  ? Colors.red.shade600
+                                  : const Color(0xFF2563EB)),
                           minHeight: 6,
                         ),
                       ),
@@ -834,20 +841,26 @@ class _RoomManagementScreenState extends State<RoomManagementScreen> {
                               ),
                               const SizedBox(height: 6),
                               const Text(
-                                'Anda bisa menambahkan kamar satu per satu atau pasang preset kamar Kos Princess siap pakai.',
+                                'Mulai kelola properti kos Anda dengan menambahkan kamar baru atau gunakan template kamar standar.',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(color: Color(0xFF64748B), height: 1.4),
                               ),
                               const SizedBox(height: 20),
-                              OutlinedButton.icon(
-                                onPressed: _populateDefaultPresetRooms,
-                                icon: const Icon(Icons.auto_awesome_rounded, color: Color(0xFFD97706)),
-                                label: const Text('Pasang Preset Kamar Kos Princess (10 Kamar)'),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: const Color(0xFF1E40AF),
-                                  side: const BorderSide(color: Color(0xFF93C5FD)),
-                                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                              ElevatedButton.icon(
+                                onPressed: _showAddRoomDialog,
+                                icon: const Icon(Icons.add_rounded, color: Colors.white),
+                                label: const Text('Tambah Kamar Baru', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF1E40AF),
+                                  padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                 ),
+                              ),
+                              const SizedBox(height: 10),
+                              TextButton.icon(
+                                onPressed: _populateDefaultPresetRooms,
+                                icon: const Icon(Icons.auto_awesome_rounded, size: 16, color: Color(0xFFD97706)),
+                                label: const Text('Gunakan Template Kamar Standar (5 Kamar)', style: TextStyle(fontSize: 13, color: Color(0xFF475569))),
                               ),
                             ],
                           ),

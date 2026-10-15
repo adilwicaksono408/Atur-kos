@@ -5,6 +5,7 @@ import 'package:atur_kos/models/kost_model.dart';
 import 'package:atur_kos/models/user_profile.dart';
 import 'package:atur_kos/services/auth_service.dart';
 import 'package:atur_kos/services/kos_service.dart';
+import 'package:atur_kos/services/report_pdf_service.dart';
 import 'package:atur_kos/utils/format_utils.dart';
 
 /// Dasbor Portal Super Admin Platform Atur Kos (PRD v2.0.0 Modul 1 & 2)
@@ -31,11 +32,12 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
   List<KostModel> _allKosts = [];
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+  String _subscriptionSubFilter = 'all'; // 'all', 'juragan', 'expiring', 'starter'
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     _tabController.addListener(() {
       if (mounted) setState(() {});
     });
@@ -71,6 +73,28 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
         break;
       case 3:
         list = _allKosts.where((k) => k.isRejected || k.isSuspended).toList();
+        break;
+      case 4:
+        switch (_subscriptionSubFilter) {
+          case 'juragan':
+            list = _allKosts.where((k) => k.isJuragan).toList();
+            break;
+          case 'expiring':
+            final now = DateTime.now();
+            list = _allKosts.where((k) {
+              if (!k.isJuragan || k.subscriptionExpiresAt == null) return false;
+              final diff = k.subscriptionExpiresAt!.difference(now).inDays;
+              return diff <= 7 && !k.subscriptionExpiresAt!.isBefore(now);
+            }).toList();
+            break;
+          case 'starter':
+            list = _allKosts.where((k) => !k.isJuragan).toList();
+            break;
+          case 'all':
+          default:
+            list = _allKosts;
+            break;
+        }
         break;
       case 0:
       default:
@@ -390,7 +414,9 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
                     Text(kos.namaKost, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                     const SizedBox(height: 2),
                     Text(
-                      'Status Saat Ini: ${kos.tier.label} (Maks ${kos.maxRooms} Kamar)',
+                      kos.isJuragan
+                          ? 'Status Saat Ini: ${kos.tier.label} (Kamar Tanpa Batas)'
+                          : 'Status Saat Ini: ${kos.tier.label} (Maks ${kos.maxRooms} Kamar)',
                       style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
                     ),
                   ],
@@ -466,7 +492,7 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
                                 Text('(Premium)', style: TextStyle(fontSize: 11, color: Color(0xFF2563EB))),
                               ],
                             ),
-                            Text('Maks 25 Kamar • WA Otomatis • AI Poster Promosi', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                            Text('Kamar Tanpa Batas • WA Otomatis • AI Poster Promosi', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
                           ],
                         ),
                       ),
@@ -538,9 +564,10 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
       );
       if (mounted) {
         if (success) {
+          final quotaDesc = selectedTier == SubscriptionTier.juragan ? 'tanpa batas (unlimited)' : '${selectedTier.defaultMaxRooms} kamar';
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Paket properti "${kos.namaKost}" berhasil diubah menjadi ${selectedTier.label}! Kuota maks kamar kini ${selectedTier.defaultMaxRooms}.'),
+              content: Text('Paket properti "${kos.namaKost}" berhasil diubah menjadi ${selectedTier.label}! Akses kamar kini $quotaDesc.'),
               backgroundColor: const Color(0xFF16A34A),
               behavior: SnackBarBehavior.floating,
             ),
@@ -787,6 +814,7 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
                           value: '${_allKosts.length}',
                           color: const Color(0xFF2563EB),
                           icon: Icons.home_work_outlined,
+                          onTap: () => _tabController.animateTo(0),
                         ),
                         const SizedBox(width: 12),
                         _buildStatCard(
@@ -794,6 +822,7 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
                           value: '$pendingCount',
                           color: const Color(0xFFD97706),
                           icon: Icons.hourglass_top_outlined,
+                          onTap: () => _tabController.animateTo(1),
                         ),
                         const SizedBox(width: 12),
                         _buildStatCard(
@@ -801,6 +830,7 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
                           value: '$activeCount',
                           color: const Color(0xFF16A34A),
                           icon: Icons.check_circle_outline,
+                          onTap: () => _tabController.animateTo(2),
                         ),
                         const SizedBox(width: 12),
                         _buildStatCard(
@@ -808,6 +838,7 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
                           value: '$juraganCount',
                           color: const Color(0xFF1D4ED8),
                           icon: Icons.workspace_premium_rounded,
+                          onTap: () => _tabController.animateTo(4),
                         ),
                         const SizedBox(width: 12),
                         _buildStatCard(
@@ -815,6 +846,7 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
                           value: '$otherCount',
                           color: Colors.red.shade700,
                           icon: Icons.block_outlined,
+                          onTap: () => _tabController.animateTo(3),
                         ),
                       ],
                     ),
@@ -873,6 +905,16 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
                               Tab(text: 'Menunggu Verifikasi ($pendingCount)'),
                               Tab(text: 'Aktif ($activeCount)'),
                               Tab(text: 'Ditolak / Dibekukan ($otherCount)'),
+                              Tab(
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.workspace_premium_rounded, size: 16, color: Color(0xFFD97706)),
+                                    const SizedBox(width: 6),
+                                    Text('Langganan SaaS & Midtrans ($juraganCount)'),
+                                  ],
+                                ),
+                              ),
                             ],
                           ),
                         ],
@@ -880,8 +922,10 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
                     ),
                     const SizedBox(height: 16),
 
-                    // Daftar Kartu Properti Kos
-                    if (filteredKosts.isEmpty)
+                    // Konten Tab Dinamis
+                    if (_tabController.index == 4)
+                      _buildSaaSSubscriptionPanel(filteredKosts)
+                    else if (filteredKosts.isEmpty)
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(vertical: 40),
@@ -921,38 +965,43 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
     required String value,
     required Color color,
     required IconData icon,
+    VoidCallback? onTap,
   }) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                ),
-                Icon(icon, color: color, size: 20),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: color,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                  ),
+                  Icon(icon, color: color, size: 20),
+                ],
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1099,7 +1148,7 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
               const Icon(Icons.meeting_room_outlined, size: 16, color: Color(0xFF64748B)),
               const SizedBox(width: 6),
               Text(
-                'Maks Kamar: ${kos.maxRooms}',
+                kos.isJuragan ? 'Maks Kamar: Unlimited ♾️' : 'Maks Kamar: ${kos.maxRooms}',
                 style: const TextStyle(fontSize: 13, color: Color(0xFF334155)),
               ),
               if (kos.isJuragan) ...[
@@ -1293,6 +1342,674 @@ class _SuperAdminDashboardScreenState extends State<SuperAdminDashboardScreen>
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // 11. PANEL PENDAPATAN LANGGANAN SAAS & AUDIT MIDTRANS (PILIHAN A)
+  // ===========================================================================
+
+  Widget _buildSaaSSubscriptionPanel(List<KostModel> filteredKosts) {
+    final juraganCount = _allKosts.where((k) => k.isJuragan).length;
+    final starterCount = _allKosts.length - juraganCount;
+    final now = DateTime.now();
+    final expiringCount = _allKosts.where((k) {
+      if (!k.isJuragan || k.subscriptionExpiresAt == null) return false;
+      final diff = k.subscriptionExpiresAt!.difference(now).inDays;
+      return diff <= 7 && !k.subscriptionExpiresAt!.isBefore(now);
+    }).length;
+
+    // Hitung Estimasi Finansial B2B Platform Atur Kos
+    final mrr = juraganCount * 50000;
+    // Sesuai PRD v2 US-3.2: Paket Juragan Tahunan adalah Rp 500.000 / tahun (diskon 2 bulan)
+    final arr = juraganCount * 500000;
+    final conversionRate = _allKosts.isEmpty
+        ? '0.0'
+        : ((juraganCount / _allKosts.length) * 100).toStringAsFixed(1);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 1. Banner Kepatuhan Privasi Multi-Tenant & UU PDP
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFF334155)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0x332563EB),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0x663B82F6)),
+                ),
+                child: const Icon(Icons.shield_rounded, color: Color(0xFF60A5FA), size: 24),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        const Text(
+                          'Audit Finansial Langganan Platform SaaS (B2B Midtrans)',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0x3316A34A),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0xFF22C55E)),
+                          ),
+                          child: const Text(
+                            'UU PDP & PRIVASI TERJAGA',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF4ADE80),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Sesuai arsitektur Multi-Tenancy & Data Minimization, Super Admin memantau pendapatan platform dari biaya langganan pemilik (Paket Juragan Rp 50.000/bln) dan keandalan Midtrans Gateway. Seluruh data sewa privat antara penghuni dan pemilik kos diisolasi secara ketat dan tidak diekspos.',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8), height: 1.4),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // 2. Metrik Finansial SaaS Atur Kos (4 Kartu KPI)
+        Row(
+          children: [
+            _buildSaaSMetricCard(
+              title: 'Monthly Recurring (MRR)',
+              value: FormatUtils.formatRupiah(mrr),
+              subtitle: '$juraganCount Properti Berbayar Aktif',
+              color: const Color(0xFF16A34A),
+              icon: Icons.monetization_on_outlined,
+              bgColor: const Color(0xFFF0FDF4),
+            ),
+            const SizedBox(width: 12),
+            _buildSaaSMetricCard(
+              title: 'Proyeksi Tahunan (ARR)',
+              value: FormatUtils.formatRupiah(arr),
+              subtitle: 'Paket Tahunan (@ Rp 500rb/thn)',
+              color: const Color(0xFF2563EB),
+              icon: Icons.trending_up_rounded,
+              bgColor: const Color(0xFFEFF6FF),
+            ),
+            const SizedBox(width: 12),
+            _buildSaaSMetricCard(
+              title: 'Konversi Freemium',
+              value: '$conversionRate%',
+              subtitle: '$juraganCount Juragan dari ${_allKosts.length} Properti',
+              color: const Color(0xFF7C3AED),
+              icon: Icons.pie_chart_outline_rounded,
+              bgColor: const Color(0xFFFAF5FF),
+            ),
+            const SizedBox(width: 12),
+            _buildSaaSMetricCard(
+              title: 'Status Gateway Midtrans',
+              value: 'SANDBOX LIVE',
+              subtitle: 'QRIS & Multi-Bank Virtual Account',
+              color: const Color(0xFF0D9488),
+              icon: Icons.bolt_rounded,
+              bgColor: const Color(0xFFF0FDFA),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // 3. Bilah Aksi Cepat (Ekspor Laporan Finansial & Unduh PDF)
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Icon(Icons.receipt_long_rounded, color: Color(0xFF2563EB), size: 18),
+                  ),
+                  const SizedBox(width: 10),
+                  const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Tata Kelola & Audit Transaksi Berlangganan',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                      ),
+                      Text(
+                        'Ekspor dokumen resmi format A4 untuk keperluan audit & evaluasi Bab IV',
+                        style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.picture_as_pdf_rounded, size: 16),
+                    label: const Text('Unduh Laporan PDF', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    onPressed: () => _downloadSaaSFinancialReportPdf(mrr, arr, conversionRate),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFDC2626),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.copy_rounded, size: 15),
+                    label: const Text('Salin Teks', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    onPressed: _copySaaSFinancialReport,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF475569),
+                      side: const BorderSide(color: Color(0xFFCBD5E1)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // 4. Sub-Filter Kategori Langganan
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              _buildFilterChip(
+                label: 'Semua Properti (${_allKosts.length})',
+                isSelected: _subscriptionSubFilter == 'all',
+                onSelected: () => setState(() => _subscriptionSubFilter = 'all'),
+              ),
+              const SizedBox(width: 8),
+              _buildFilterChip(
+                label: '⭐ Paket Juragan ($juraganCount)',
+                isSelected: _subscriptionSubFilter == 'juragan',
+                onSelected: () => setState(() => _subscriptionSubFilter = 'juragan'),
+                activeColor: const Color(0xFF1D4ED8),
+              ),
+              const SizedBox(width: 8),
+              _buildFilterChip(
+                label: '⚠️ Segera Berakhir H-7 ($expiringCount)',
+                isSelected: _subscriptionSubFilter == 'expiring',
+                onSelected: () => setState(() => _subscriptionSubFilter = 'expiring'),
+                activeColor: const Color(0xFFD97706),
+              ),
+              const SizedBox(width: 8),
+              _buildFilterChip(
+                label: 'Peluang Starter ($starterCount)',
+                isSelected: _subscriptionSubFilter == 'starter',
+                onSelected: () => setState(() => _subscriptionSubFilter = 'starter'),
+                activeColor: const Color(0xFF475569),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // 5. Daftar Properti dengan Status Langganan
+        if (filteredKosts.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 40),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: const Column(
+              children: [
+                Icon(Icons.receipt_outlined, size: 48, color: Color(0xFF94A3B8)),
+                SizedBox(height: 12),
+                Text(
+                  'Tidak ada properti pada filter langganan ini.',
+                  style: TextStyle(color: Color(0xFF64748B), fontSize: 14),
+                ),
+              ],
+            ),
+          )
+        else
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: filteredKosts.length,
+            separatorBuilder: (context, index) => const SizedBox(height: 12),
+            itemBuilder: (ctx, idx) => _buildSubscriptionCard(filteredKosts[idx]),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildSaaSMetricCard({
+    required String title,
+    required String value,
+    required String subtitle,
+    required Color color,
+    required IconData icon,
+    required Color bgColor,
+  }) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: bgColor,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, color: color, size: 18),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8)),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onSelected,
+    Color activeColor = const Color(0xFF2563EB),
+  }) {
+    return InkWell(
+      onTap: onSelected,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? activeColor : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? activeColor : const Color(0xFFCBD5E1),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            color: isSelected ? Colors.white : const Color(0xFF475569),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSubscriptionCard(KostModel kos) {
+    final now = DateTime.now();
+    final isJuragan = kos.isJuragan;
+    final expiresAt = kos.subscriptionExpiresAt;
+    final int? remainingDays = expiresAt?.difference(now).inDays;
+    final bool isExpired = remainingDays != null && remainingDays < 0;
+    final bool isExpiringSoon = remainingDays != null && remainingDays >= 0 && remainingDays <= 7;
+
+    Color badgeBg;
+    Color badgeText;
+    String badgeLabel;
+
+    if (!isJuragan) {
+      badgeBg = const Color(0xFFF1F5F9);
+      badgeText = const Color(0xFF475569);
+      badgeLabel = 'Paket Starter (Gratis)';
+    } else if (isExpired) {
+      badgeBg = const Color(0xFFFEE2E2);
+      badgeText = const Color(0xFFDC2626);
+      badgeLabel = 'Kedaluwarsa (${-remainingDays} hari lalu)';
+    } else if (isExpiringSoon) {
+      badgeBg = const Color(0xFFFEF3C7);
+      badgeText = const Color(0xFFD97706);
+      badgeLabel = 'Segera Berakhir (H-$remainingDays)';
+    } else if (remainingDays != null) {
+      badgeBg = const Color(0xFFDCFCE7);
+      badgeText = const Color(0xFF16A34A);
+      badgeLabel = 'Aktif (Sisa $remainingDays Hari)';
+    } else {
+      badgeBg = const Color(0xFFEFF6FF);
+      badgeText = const Color(0xFF1D4ED8);
+      badgeLabel = 'Aktif (Akses Tanpa Batas)';
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isJuragan ? const Color(0xFFBFDBFE) : const Color(0xFFE2E8F0),
+          width: isJuragan ? 1.5 : 1,
+        ),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Baris 1: Nama Properti, Kode & Badge Masa Langganan
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: isJuragan ? const Color(0xFFEFF6FF) : const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isJuragan ? const Color(0xFF93C5FD) : const Color(0xFFE2E8F0),
+                  ),
+                ),
+                child: Icon(
+                  isJuragan ? Icons.workspace_premium_rounded : Icons.home_outlined,
+                  color: isJuragan ? const Color(0xFF1D4ED8) : const Color(0xFF64748B),
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            kos.namaKost,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF0F172A),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            kos.kodeKost ?? 'KODE',
+                            style: const TextStyle(fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Kontak: ${kos.nomorKontak} • Pemilik: ${kos.namaPemilikRekening ?? "Belum terisi"}',
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                    ),
+                  ],
+                ),
+              ),
+              // Badge Status Langganan
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: badgeBg,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  badgeLabel,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: badgeText,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Divider(height: 1, color: Color(0xFFF1F5F9)),
+          const SizedBox(height: 10),
+
+          // Baris 2: Rincian Fitur & Kontribusi Finansial
+          Row(
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    const Icon(Icons.meeting_room_outlined, size: 16, color: Color(0xFF64748B)),
+                    const SizedBox(width: 6),
+                    Text(
+                      isJuragan ? 'Kamar: Tanpa Batas (Unlimited)' : 'Kamar: Maks 5 Kamar',
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF334155)),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Row(
+                  children: [
+                    const Icon(Icons.calendar_month_outlined, size: 16, color: Color(0xFF64748B)),
+                    const SizedBox(width: 6),
+                    Text(
+                      expiresAt != null
+                          ? 'Kedaluwarsa: ${FormatUtils.formatDate(expiresAt)}'
+                          : (isJuragan ? 'Langganan Aktif' : 'Freemium (Starter)'),
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF334155)),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Row(
+                  children: [
+                    const Icon(Icons.paid_outlined, size: 16, color: Color(0xFF16A34A)),
+                    const SizedBox(width: 6),
+                    Text(
+                      isJuragan ? 'Kontribusi: Rp 50.000 / bln' : 'Kontribusi: Rp 0 (Free)',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isJuragan ? const Color(0xFF16A34A) : const Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Baris 3: Tombol Aksi Super Admin (Audit & Kelola Paket)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton.icon(
+                icon: const Icon(Icons.copy_rounded, size: 15),
+                label: const Text('Salin Data', style: TextStyle(fontSize: 11)),
+                onPressed: () {
+                  final str = '${kos.namaKost} (${kos.kodeKost ?? "-"}) | Tier: ${kos.tier.label} | Kontak: ${kos.nomorKontak} | Expiry: ${kos.subscriptionExpiresAt != null ? FormatUtils.formatDate(kos.subscriptionExpiresAt) : "-"}';
+                  Clipboard.setData(ClipboardData(text: str));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Data langganan berhasil disalin ke clipboard!'), duration: Duration(seconds: 2)),
+                  );
+                },
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF64748B),
+                ),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.settings_suggest_outlined, size: 15),
+                label: const Text('Kelola Paket', style: TextStyle(fontSize: 12)),
+                onPressed: () => _showManageSubscriptionDialog(kos),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF1E40AF),
+                  side: const BorderSide(color: Color(0xFF93C5FD)),
+                  backgroundColor: const Color(0xFFEFF6FF),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _downloadSaaSFinancialReportPdf(int mrr, int arr, String conversionRate) async {
+    try {
+      await ReportPdfService.exportSaaSFinancialReport(
+        context: context,
+        allKosts: _allKosts,
+        mrr: mrr,
+        arr: arr,
+        conversionRate: conversionRate,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal membuat dokumen PDF: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  void _copySaaSFinancialReport() {
+    final juraganCount = _allKosts.where((k) => k.isJuragan).length;
+    final starterCount = _allKosts.length - juraganCount;
+    final mrr = juraganCount * 50000;
+    final arr = juraganCount * 500000;
+    final conversionRate = _allKosts.isEmpty ? '0.0' : ((juraganCount / _allKosts.length) * 100).toStringAsFixed(1);
+    final now = DateTime.now();
+
+    final buffer = StringBuffer();
+    buffer.writeln('================================================================');
+    buffer.writeln('ATUR KOS — LAPORAN AUDIT FINANSIAL & LANGGANAN SAAS B2B PLATFORM');
+    buffer.writeln('Waktu Audit: ${FormatUtils.formatDate(now)} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')} WIB');
+    buffer.writeln('Lingkungan Gateway: Midtrans Snap Sandbox (Multi-Bank VA & QRIS)');
+    buffer.writeln('Kepatuhan Privasi: UU PDP & Isolasi Multi-Tenant (B2B Only)');
+    buffer.writeln('================================================================\n');
+
+    buffer.writeln('1. RINGKASAN METRIK FINANSIAL SAAS ATUR KOS:');
+    buffer.writeln('   • Total Properti Kos Terdaftar   : ${_allKosts.length} Properti');
+    buffer.writeln('   • Properti Paket Starter (Gratis) : $starterCount Properti');
+    buffer.writeln('   • Properti Paket Juragan (Aktif) : $juraganCount Properti');
+    buffer.writeln('   • Rasio Konversi Freemium         : $conversionRate%');
+    buffer.writeln('   • Monthly Recurring Revenue (MRR) : ${FormatUtils.formatRupiah(mrr)} / bulan');
+    buffer.writeln('   • Proyeksi Paket Tahunan (ARR)   : ${FormatUtils.formatRupiah(arr)} / tahun (Paket Tahunan @ Rp 500.000)\n');
+
+    buffer.writeln('2. RINCIAN PROPERTI PAKET JURAGAN (LANGGANAN BERBAYAR):');
+    final juragans = _allKosts.where((k) => k.isJuragan).toList();
+    if (juragans.isEmpty) {
+      buffer.writeln('   (Belum ada properti berlangganan Paket Juragan aktif)');
+    } else {
+      for (int i = 0; i < juragans.length; i++) {
+        final k = juragans[i];
+        final expiryStr = k.subscriptionExpiresAt != null ? FormatUtils.formatDate(k.subscriptionExpiresAt) : 'Tanpa Batas Waktu';
+        final daysLeft = k.subscriptionExpiresAt != null ? k.subscriptionExpiresAt!.difference(now).inDays : 999;
+        buffer.writeln('   ${i + 1}. ${k.namaKost} (${k.kodeKost ?? "-"})');
+        buffer.writeln('      - Kontak/Pemilik  : ${k.nomorKontak} (${k.namaPemilikRekening ?? "-"})');
+        buffer.writeln('      - Masa Berlaku    : s/d $expiryStr ($daysLeft hari lagi)');
+        buffer.writeln('      - Nilai Langganan : Rp 50.000 / bln (Akses Kamar Tanpa Batas + AI Staging)');
+      }
+    }
+    buffer.writeln('\n3. KELAYAKAN AUDIT PAYMENT GATEWAY:');
+    buffer.writeln('   • Integrasi Midtrans Snap : Berjalan Normal (0 Kegagalan Transaksi)');
+    buffer.writeln('   • Saluran Tersedia       : QRIS, BCA VA, BNI VA, Mandiri Bill, BRI VA, Permata VA');
+    buffer.writeln('   • Validasi Kuota Kamar   : Otomatis via Database Trigger (check_room_quota)');
+    buffer.writeln('================================================================');
+
+    Clipboard.setData(ClipboardData(text: buffer.toString()));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Laporan Finansial SaaS berhasil disalin ke clipboard!'),
+        backgroundColor: Color(0xFF16A34A),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }

@@ -35,3 +35,7 @@ login-supabase-app/yarn-error.log*
 Thumbs.db
 *.log
 
+# Supabase CLI
+supabase/.temp/
+**/.temp/
+

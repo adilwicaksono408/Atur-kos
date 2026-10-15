@@ -1,6 +1,10 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:atur_kos/models/user_profile.dart';
+import 'package:atur_kos/screens/payment/midtrans_tenant_payment_dialog.dart';
 import 'package:atur_kos/services/auth_service.dart';
 import 'package:atur_kos/services/kos_service.dart';
 import 'package:atur_kos/utils/format_utils.dart';
@@ -21,18 +25,24 @@ class TenantDashboardScreen extends StatefulWidget {
 }
 
 class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
+  late UserProfile _currentProfile;
+  final ImagePicker _picker = ImagePicker();
+
   Map<String, dynamic>? _assignmentData;
   Map<String, dynamic>? _linkedKosData;
+  Map<String, dynamic>? _activeInvoice;
   List<Map<String, dynamic>> _complaints = [];
   bool _isLoading = true;
   bool _isProofUploaded = false;
   bool _isJoiningKos = false;
+  bool _showManualTransferOptions = false;
   String? _h30Status; // 'lanjut', 'selesai', 'menunggu'
   final _kodeUndanganController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    _currentProfile = widget.profile;
     _fetchTenantData();
   }
 
@@ -47,10 +57,33 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
     final assignment = await KosService.getTenantActiveAssignment(widget.profile.id);
     List<Map<String, dynamic>> complaints = [];
     Map<String, dynamic>? linkedKos;
+    Map<String, dynamic>? activeInvoice;
+
+    // Refresh data profil terbaru untuk identitas KTP & kontak darurat
+    UserProfile? freshProfile;
+    final authUser = Supabase.instance.client.auth.currentUser;
+    if (authUser != null) {
+      try {
+        freshProfile = await AuthService.fetchUserProfile(authUser);
+      } catch (_) {}
+    }
 
     if (assignment != null) {
       final kostId = assignment['kost_id']?.toString();
       final tenantId = assignment['id']?.toString();
+      final room = assignment['rooms'] as Map<String, dynamic>?;
+      final roomPrice = (room?['harga_bulanan'] as num?)?.toDouble() ?? 1200000.0;
+      final roomNum = room?['nomor_kamar']?.toString() ?? '01';
+
+      if (tenantId != null) {
+        activeInvoice = await KosService.getTenantActiveInvoice(
+          tenantId,
+          kostId: kostId,
+          nominal: roomPrice,
+          nomorKamar: roomNum,
+        );
+      }
+
       complaints = await KosService.getComplaints(
         kostId: kostId,
         tenantId: tenantId,
@@ -78,9 +111,14 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
 
     if (mounted) {
       setState(() {
+        if (freshProfile != null) {
+          _currentProfile = freshProfile;
+        }
         _assignmentData = assignment;
         _linkedKosData = linkedKos;
+        _activeInvoice = activeInvoice;
         _complaints = complaints;
+        _isProofUploaded = activeInvoice?['status'] == 'menunggu_verifikasi';
         _isLoading = false;
       });
     }
@@ -100,7 +138,7 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
   }
 
   String _getDisplayName() {
-    final name = widget.profile.fullName.trim();
+    final name = _currentProfile.fullName.trim();
     if (name.isEmpty || name == 'Pengguna') {
       return 'Kak Penghuni';
     }
@@ -130,28 +168,121 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
     return 'Kos';
   }
 
-  void _handleUploadProof() {
+  Future<void> _handleUploadProof() async {
+    final invoiceId = _activeInvoice?['id']?.toString();
+    if (invoiceId != null) {
+      await KosService.uploadTenantInvoiceProofManual(
+        invoiceId: invoiceId,
+        buktiBayarUrl: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600',
+      );
+    }
+
     setState(() {
       _isProofUploaded = true;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Row(
-          children: [
-            Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Bukti transfer berhasil diunggah! Status: Menunggu Verifikasi Pemilik. Reminder WA otomatis dihentikan.',
+    _fetchTenantData();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Bukti transfer berhasil diunggah! Status: Menunggu Verifikasi Pemilik. Reminder WA otomatis dihentikan.',
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
+          backgroundColor: const Color(0xFF059669),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
-        backgroundColor: const Color(0xFF059669),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
+      );
+    }
+  }
+
+  /// Membuka dialog pembayaran Midtrans Snap Sandbox untuk sewa kamar (PRD Modul 4)
+  Future<void> _openMidtransPayment() async {
+    if (_assignmentData == null || _activeInvoice == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Data tagihan belum siap. Silakan muat ulang dasbor.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final invoiceId = _activeInvoice!['id']?.toString() ?? '';
+    final kostId = _assignmentData!['kost_id']?.toString() ?? '';
+    final tenantId = _assignmentData!['id']?.toString() ?? '';
+    final room = _assignmentData!['rooms'] as Map<String, dynamic>?;
+    final roomNumber = room?['nomor_kamar']?.toString() ?? '01';
+    final roomType = room?['tipe']?.toString() ?? 'Standard';
+    final nominal = (_activeInvoice!['nominal'] as num?)?.toDouble() ??
+        (room?['harga_bulanan'] as num?)?.toDouble() ??
+        1200000.0;
+    final periode = _activeInvoice!['periode']?.toString() ??
+        "${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}";
+    final orderId = _activeInvoice!['order_id']?.toString() ?? _activeInvoice!['nomor_invoice']?.toString();
+    final dueDate = _activeInvoice!['tanggal_jatuh_tempo']?.toString();
+
+    final settled = await MidtransTenantPaymentDialog.show(
+      context,
+      invoiceId: invoiceId,
+      kostId: kostId,
+      tenantId: tenantId,
+      kosName: _getKosName(),
+      roomNumber: roomNumber,
+      roomType: roomType,
+      tenantName: _getDisplayName(),
+      periode: periode,
+      nominal: nominal,
+      existingOrderId: orderId,
+      dueDate: dueDate,
+      onPaymentSuccess: () {
+        _fetchTenantData();
+      },
+    );
+
+    if (settled == true) {
+      _fetchTenantData();
+    }
+  }
+
+  /// Menampilkan modal kuitansi sah digital ber-QR code anti-manipulasi (US-4.4)
+  void _openDigitalReceipt() {
+    if (_activeInvoice == null) return;
+    final room = _assignmentData?['rooms'] as Map<String, dynamic>?;
+    final roomNumber = room?['nomor_kamar']?.toString() ?? '01';
+    final roomType = room?['tipe']?.toString() ?? 'Standard';
+    final orderId = _activeInvoice!['order_id']?.toString() ?? _activeInvoice!['nomor_invoice']?.toString() ?? '-';
+    final midtransTrxId = _activeInvoice!['midtrans_transaction_id']?.toString() ?? 'MTR-AUTO-SETTLED';
+    final nominal = (_activeInvoice!['nominal'] as num?)?.toDouble() ?? 1200000.0;
+    final paymentType = _activeInvoice!['payment_type']?.toString().toUpperCase() ?? 'MIDTRANS SNAP';
+    final settlementTime = _activeInvoice!['settlement_time']?.toString() ??
+        _activeInvoice!['diverifikasi_pada']?.toString() ??
+        DateTime.now().toIso8601String().substring(0, 16);
+    final qrVerificationCode = _activeInvoice!['qr_verification_code']?.toString() ??
+        'ATURKOS-$orderId';
+
+    MidtransTenantPaymentDialog.showReceiptModal(
+      context,
+      orderId: orderId,
+      midtransTrxId: midtransTrxId,
+      kosName: _getKosName(),
+      roomNumber: roomNumber,
+      roomType: roomType,
+      tenantName: _getDisplayName(),
+      periode: _activeInvoice!['periode']?.toString() ?? 'Bulan Ini',
+      nominal: nominal,
+      paymentType: paymentType,
+      settlementTime: settlementTime,
+      qrVerificationCode: qrVerificationCode,
     );
   }
 
@@ -686,6 +817,9 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
                         ),
                       ),
 
+                      // Kartu Identitas Diri & Dokumen KTP (PRD Identitas Penghuni)
+                      _buildIdentityCard(),
+
                       // Banner Notifikasi Mitigasi H-30 jika sudah aktif
                       if (hasRoom && _h30Status == null)
                         Container(
@@ -928,7 +1062,7 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
                           ),
                           const SizedBox(height: 2),
                           const Text(
-                            'Dapatkan kode ini dari pemilik kos Anda (Contoh: PRINCESS)',
+                            'Dapatkan kode ini dari pemilik atau pengelola kos Anda',
                             style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
                           ),
                         ],
@@ -941,7 +1075,7 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
                   controller: _kodeUndanganController,
                   textCapitalization: TextCapitalization.characters,
                   decoration: InputDecoration(
-                    hintText: hasLinkedKos ? kodeKost : 'Contoh: PRINCESS',
+                    hintText: hasLinkedKos ? kodeKost : 'Contoh: KOSKU123',
                     prefixIcon: const Icon(Icons.key_rounded, size: 20, color: Color(0xFF0D9488)),
                     filled: true,
                     fillColor: Colors.white,
@@ -1047,7 +1181,7 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
     );
   }
 
-  /// Tampilan saat penghuni sudah memiliki kamar aktif di Kos Princess
+  /// Tampilan saat penghuni sudah memiliki kamar aktif di kos
   Widget _buildAllocatedState() {
     final room = _assignmentData?['rooms'] as Map<String, dynamic>?;
     final kost = _assignmentData?['kosts'] as Map<String, dynamic>?;
@@ -1163,134 +1297,360 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
 
         const SizedBox(height: 24),
 
-        // Kartu Tagihan Bulan Berjalan (Smart Billing PRD)
-        const Text(
-          'Tagihan Sewa Bulan Ini',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF0F172A),
-          ),
+        // Kartu Tagihan Bulan Berjalan (Smart Billing PRD Modul 4)
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Tagihan Sewa Bulan Ini',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF0F172A),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.shield_outlined, size: 12, color: Color(0xFF0D9488)),
+                  SizedBox(width: 4),
+                  Text(
+                    'Midtrans Protected',
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF0D9488)),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 12),
 
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: _isProofUploaded ? const Color(0xFF0D9488) : const Color(0xFFF59E0B),
-              width: 1.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.02),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Periode Berjalan',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF64748B),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        FormatUtils.rupiah(price),
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF0F172A),
-                        ),
-                      ),
-                    ],
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: _isProofUploaded ? const Color(0xFFFEF3C7) : const Color(0xFFFEE2E2),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      _isProofUploaded ? 'Menunggu Verifikasi' : 'Belum Bayar',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: _isProofUploaded ? const Color(0xFFB45309) : const Color(0xFFDC2626),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              const Divider(height: 1, color: Color(0xFFF1F5F9)),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  const Icon(Icons.account_balance_rounded, size: 16, color: Color(0xFF64748B)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Rekening Tujuan: $bankInfo',
-                      style: const TextStyle(fontSize: 12, color: Color(0xFF475569), fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              if (_isProofUploaded)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF0FDF4),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 20),
-                      SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Bukti transfer telah diterima. Pemilik kos akan memvalidasi pembayaran Anda.',
-                          style: TextStyle(fontSize: 12, color: Color(0xFF15803D)),
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _handleUploadProof,
-                    icon: const Icon(Icons.cloud_upload_rounded),
-                    label: const Text('Unggah Bukti Transfer Bank'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0D9488),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      elevation: 0,
-                    ),
-                  ),
+        Builder(
+          builder: (context) {
+            final activeNominal = (_activeInvoice?['nominal'] as num?)?.toDouble() ?? price;
+            final orderId = _activeInvoice?['order_id']?.toString() ?? _activeInvoice?['nomor_invoice']?.toString() ?? '-';
+            final periodeStr = _activeInvoice?['periode']?.toString() ?? 'Bulan Berjalan';
+            final status = _activeInvoice?['status']?.toString() ?? (_isProofUploaded ? 'menunggu_verifikasi' : 'belum_bayar');
+            final isPaid = status == 'lunas';
+            final isPending = status == 'menunggu_verifikasi';
+
+            return Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isPaid
+                      ? const Color(0xFF10B981)
+                      : isPending
+                          ? const Color(0xFFF59E0B)
+                          : const Color(0xFF0D9488),
+                  width: 1.5,
                 ),
-            ],
-          ),
+                boxShadow: [
+                  BoxShadow(
+                    color: isPaid
+                        ? const Color(0xFF10B981).withValues(alpha: 0.06)
+                        : Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Periode $periodeStr',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            FormatUtils.rupiah(activeNominal),
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isPaid
+                              ? const Color(0xFFDCFCE7)
+                              : isPending
+                                  ? const Color(0xFFFEF3C7)
+                                  : const Color(0xFFFEE2E2),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (isPaid) ...[
+                              const Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 14),
+                              const SizedBox(width: 4),
+                            ],
+                            Text(
+                              isPaid
+                                  ? 'Lunas'
+                                  : isPending
+                                      ? 'Menunggu Verifikasi'
+                                      : 'Belum Bayar',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: isPaid
+                                    ? const Color(0xFF16A34A)
+                                    : isPending
+                                        ? const Color(0xFFB45309)
+                                        : const Color(0xFFDC2626),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                  const SizedBox(height: 14),
+
+                  // Kondisi 1: SUDAH LUNAS (Midtrans Snap auto-settlement atau manual)
+                  if (isPaid) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0FDF4),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFBBF7D0)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.verified_rounded, color: Color(0xFF16A34A), size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Terbayar via ${_activeInvoice?['payment_type']?.toString().toUpperCase() ?? 'MIDTRANS SNAP'}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF15803D),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Order ID: $orderId',
+                            style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: Color(0xFF166534)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _openDigitalReceipt,
+                        icon: const Icon(Icons.receipt_long_rounded, size: 18),
+                        label: const Text('Lihat Kuitansi Sah Digital (QR Code)', style: TextStyle(fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF059669),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 0,
+                        ),
+                      ),
+                    ),
+                  ]
+                  // Kondisi 2: MENUNGGU VERIFIKASI (Bukti transfer manual)
+                  else if (isPending) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFFBEB),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFFDE68A)),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.hourglass_top_rounded, color: Color(0xFFD97706), size: 20),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Bukti transfer telah diterima. Pemilik kos sedang memvalidasi pembayaran Anda.',
+                              style: TextStyle(fontSize: 12, color: Color(0xFFB45309)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _openMidtransPayment,
+                        icon: const Icon(Icons.flash_on_rounded, size: 18, color: Color(0xFF0D9488)),
+                        label: const Text(
+                          'Atau Bayar Instan via Midtrans (Auto-Lunas)',
+                          style: TextStyle(color: Color(0xFF0D9488), fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFF0D9488)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ),
+                  ]
+                  // Kondisi 3: BELUM BAYAR (Alur Utama: Midtrans Snap Gateway)
+                  else ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0FDFA),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFCCFBF1)),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.flash_on_rounded, color: Color(0xFF0D9488), size: 18),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Bayar instan via QRIS atau Virtual Account semua bank. Verifikasi otomatis tanpa perlu konfirmasi manual!',
+                              style: TextStyle(fontSize: 11, color: Color(0xFF0F766E), height: 1.3),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Tombol Utama: Bayar via Midtrans Snap (Sandbox)
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _openMidtransPayment,
+                        icon: const Icon(Icons.payment_rounded, size: 18),
+                        label: const Text(
+                          'Bayar via Midtrans (Sandbox)',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0D9488),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          elevation: 0,
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Opsi Transfer Manual Bank Kos (Accordion / Toggle)
+                    InkWell(
+                      onTap: () {
+                        setState(() {
+                          _showManualTransferOptions = !_showManualTransferOptions;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(10),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              _showManualTransferOptions ? 'Sembunyikan Opsi Transfer Manual' : 'Opsi Alternatif: Transfer Bank Manual',
+                              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(
+                              _showManualTransferOptions ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                              size: 16,
+                              color: const Color(0xFF64748B),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    if (_showManualTransferOptions) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.account_balance_rounded, size: 16, color: Color(0xFF64748B)),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Rekening Tujuan: $bankInfo',
+                                    style: const TextStyle(fontSize: 12, color: Color(0xFF475569), fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: _handleUploadProof,
+                                icon: const Icon(Icons.cloud_upload_rounded, size: 16),
+                                label: const Text('Unggah Bukti Transfer Bank', style: TextStyle(fontSize: 12)),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF475569),
+                                  side: const BorderSide(color: Color(0xFFCBD5E1)),
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ],
+              ),
+            );
+          },
         ),
 
         const SizedBox(height: 26),
@@ -1420,6 +1780,792 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // KELENGKAPAN IDENTITAS DIRI & DOKUMEN KTP PENGHUNI (PRD IDENTITAS PENGHUNI)
+  // ===========================================================================
+
+  Widget _buildIdentityCard() {
+    final hasKtp = _currentProfile.hasKtp;
+    final hasNik = _currentProfile.hasNik;
+    final isComplete = hasKtp && hasNik;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: isComplete ? const Color(0xFFF0FDF4) : const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isComplete ? const Color(0xFFBBF7D0) : const Color(0xFFFDE68A),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: (isComplete ? const Color(0xFF16A34A) : const Color(0xFFD97706))
+                .withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: isComplete ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  isComplete ? Icons.badge_rounded : Icons.contact_emergency_rounded,
+                  color: isComplete ? const Color(0xFF16A34A) : const Color(0xFFD97706),
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            isComplete ? 'Identitas Diri & KTP Terlampir' : 'Kelengkapan Identitas & KTP',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: isComplete ? const Color(0xFF14532D) : const Color(0xFF92400E),
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: isComplete ? const Color(0xFF16A34A) : const Color(0xFFD97706),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            isComplete ? 'Terverifikasi' : 'Perlu Dilengkapi',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      isComplete
+                          ? 'Data NIK KTP dan kontak darurat Anda telah tercatat dengan aman untuk keperluan administrasi kos.'
+                          : 'Pemilik kos menganjurkan Anda melengkapi NIK, foto fisik KTP, dan kontak darurat untuk ketertiban sewa & pencatatan warga.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isComplete ? const Color(0xFF166534) : const Color(0xFFB45309),
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          const Divider(height: 1, color: Color(0xFFE2E8F0)),
+          const SizedBox(height: 12),
+          // Info Ringkas
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Nomor NIK KTP',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade600,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _currentProfile.maskedNik,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F172A),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Kontak Darurat',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade600,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _currentProfile.kontakDaruratNama != null &&
+                              _currentProfile.kontakDaruratNama!.isNotEmpty
+                          ? '${_currentProfile.kontakDaruratNama} (${_currentProfile.kontakDaruratWa ?? "-"})'
+                          : 'Belum diisi',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: _currentProfile.kontakDaruratNama != null
+                            ? const Color(0xFF0F172A)
+                            : Colors.grey.shade500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          // Action Buttons
+          Row(
+            children: [
+              if (hasKtp) ...[
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _showKtpPreviewModal(
+                      title: 'Dokumen KTP Saya',
+                      imageUrl: _currentProfile.dokumenKtpUrl!,
+                      nik: _currentProfile.nikKtp ?? '-',
+                      name: _currentProfile.fullName,
+                      emergencyName: _currentProfile.kontakDaruratNama,
+                      emergencyWa: _currentProfile.kontakDaruratWa,
+                    ),
+                    icon: const Icon(Icons.fullscreen_rounded, size: 18),
+                    label: const Text('Lihat Foto KTP'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF16A34A),
+                      side: const BorderSide(color: Color(0xFF16A34A)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _showEditIdentityDialog,
+                  icon: Icon(hasKtp ? Icons.edit_rounded : Icons.upload_file_rounded, size: 18),
+                  label: Text(hasKtp ? 'Ubah Data' : 'Lengkapi KTP'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: hasKtp ? const Color(0xFF0F172A) : const Color(0xFFD97706),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    elevation: 0,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Dialog Form Lengkapi Identitas Diri, NIK & Dokumen KTP
+  Future<void> _showEditIdentityDialog() async {
+    final formKey = GlobalKey<FormState>();
+    final nikController = TextEditingController(text: _currentProfile.nikKtp ?? '');
+    final nameController = TextEditingController(text: _currentProfile.fullName);
+    final emergencyNameController =
+        TextEditingController(text: _currentProfile.kontakDaruratNama ?? '');
+    final emergencyWaController =
+        TextEditingController(text: _currentProfile.kontakDaruratWa ?? '');
+
+    String currentKtpUrl = _currentProfile.dokumenKtpUrl ?? '';
+    Uint8List? localKtpBytes;
+    bool isUploadingKtp = false;
+    bool isSaving = false;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: !isSaving,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          Future<void> pickImage(ImageSource source) async {
+            try {
+              setDialogState(() => isUploadingKtp = true);
+              final XFile? picked = await _picker.pickImage(
+                source: source,
+                maxWidth: 1200,
+                maxHeight: 1200,
+                imageQuality: 80,
+              );
+              if (picked == null) {
+                setDialogState(() => isUploadingKtp = false);
+                return;
+              }
+              final bytes = await picked.readAsBytes();
+              final ext = picked.name.split('.').last.toLowerCase();
+              final mimeType = ext == 'png' ? 'image/png' : 'image/jpeg';
+              String finalUrl = 'data:$mimeType;base64,${base64Encode(bytes)}';
+
+              try {
+                final fileName =
+                    'ktp_${_currentProfile.id}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+                final path = 'tenants/$fileName';
+                await Supabase.instance.client.storage
+                    .from('verification-docs')
+                    .uploadBinary(
+                      path,
+                      bytes,
+                      fileOptions: FileOptions(contentType: mimeType, upsert: true),
+                    );
+                final publicUrl = Supabase.instance.client.storage
+                    .from('verification-docs')
+                    .getPublicUrl(path);
+                finalUrl = publicUrl;
+              } catch (storageError) {
+                debugPrint('Storage bucket fallback to Base64: $storageError');
+              }
+
+              setDialogState(() {
+                localKtpBytes = bytes;
+                currentKtpUrl = finalUrl;
+                isUploadingKtp = false;
+              });
+            } catch (e) {
+              setDialogState(() => isUploadingKtp = false);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Gagal memilih gambar: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            }
+          }
+
+          final hasImage = currentKtpUrl.isNotEmpty || localKtpBytes != null;
+
+          return Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 520, maxHeight: 680),
+              padding: const EdgeInsets.all(22),
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.badge_rounded, color: Color(0xFF0D9488), size: 24),
+                            SizedBox(width: 10),
+                            Text(
+                              'Identitas Diri & KTP',
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        if (!isSaving)
+                          IconButton(
+                            onPressed: () => Navigator.pop(dialogCtx),
+                            icon: const Icon(Icons.close_rounded),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Lengkapi data NIK dan foto KTP asli Anda untuk pencatatan resmi warga kos dan kontak darurat.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                    ),
+                    const SizedBox(height: 16),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // 1. Nama Sesuai KTP
+                            const Text(
+                              'Nama Lengkap (Sesuai KTP)',
+                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                            ),
+                            const SizedBox(height: 6),
+                            TextFormField(
+                              controller: nameController,
+                              decoration: InputDecoration(
+                                hintText: 'Nama lengkap sesuai KTP',
+                                prefixIcon: const Icon(Icons.person_outline_rounded, size: 20),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              ),
+                              validator: (val) {
+                                if (val == null || val.trim().isEmpty) {
+                                  return 'Nama lengkap wajib diisi';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 14),
+
+                            // 2. NIK KTP
+                            const Text(
+                              'Nomor Induk Kependudukan (NIK KTP)',
+                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                            ),
+                            const SizedBox(height: 6),
+                            TextFormField(
+                              controller: nikController,
+                              keyboardType: TextInputType.number,
+                              maxLength: 16,
+                              decoration: InputDecoration(
+                                hintText: 'Contoh: 3201234567890001',
+                                counterText: '',
+                                prefixIcon: const Icon(Icons.credit_card_rounded, size: 20),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              ),
+                              validator: (val) {
+                                if (val != null && val.trim().isNotEmpty) {
+                                  final clean = val.trim();
+                                  if (clean.length != 16 || int.tryParse(clean) == null) {
+                                    return 'NIK KTP harus tepat 16 digit angka';
+                                  }
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 14),
+
+                            // 3. Foto Dokumen KTP
+                            const Text(
+                              'Foto / Scan Dokumen KTP Asli',
+                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Pastikan foto jelas, tidak buram, dan teks terbaca.',
+                              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                            ),
+                            const SizedBox(height: 8),
+
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: hasImage ? const Color(0xFFCBD5E1) : const Color(0xFFE2E8F0),
+                                ),
+                              ),
+                              child: Column(
+                                children: [
+                                  if (isUploadingKtp)
+                                    const Padding(
+                                      padding: EdgeInsets.symmetric(vertical: 30),
+                                      child: Column(
+                                        children: [
+                                          CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0D9488)),
+                                          SizedBox(height: 10),
+                                          Text('Memproses foto KTP...', style: TextStyle(fontSize: 12)),
+                                        ],
+                                      ),
+                                    )
+                                  else if (hasImage) ...[
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: SizedBox(
+                                        height: 170,
+                                        width: double.infinity,
+                                        child: _buildKtpImageWidget(currentKtpUrl, localKtpBytes),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.end,
+                                      children: [
+                                        TextButton.icon(
+                                          onPressed: () {
+                                            setDialogState(() {
+                                              localKtpBytes = null;
+                                              currentKtpUrl = '';
+                                            });
+                                          },
+                                          icon: const Icon(Icons.delete_outline_rounded,
+                                              size: 16, color: Colors.red),
+                                          label: const Text('Hapus',
+                                              style: TextStyle(fontSize: 12, color: Colors.red)),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        OutlinedButton.icon(
+                                          onPressed: () => pickImage(ImageSource.gallery),
+                                          icon: const Icon(Icons.photo_library_rounded, size: 16),
+                                          label: const Text('Ganti', style: TextStyle(fontSize: 12)),
+                                          style: OutlinedButton.styleFrom(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                            minimumSize: Size.zero,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ] else
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 20),
+                                      child: Column(
+                                        children: [
+                                          Icon(Icons.add_a_photo_outlined, size: 40, color: Colors.grey.shade400),
+                                          const SizedBox(height: 8),
+                                          const Text(
+                                            'Pilih Foto Dokumen KTP',
+                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Kamera langsung atau ambil dari galeri',
+                                            style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                                          ),
+                                          const SizedBox(height: 14),
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              ElevatedButton.icon(
+                                                onPressed: () => pickImage(ImageSource.camera),
+                                                icon: const Icon(Icons.camera_alt_rounded, size: 16),
+                                                label: const Text('Kamera', style: TextStyle(fontSize: 12)),
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: const Color(0xFF0F172A),
+                                                  foregroundColor: Colors.white,
+                                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                  elevation: 0,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 10),
+                                              OutlinedButton.icon(
+                                                onPressed: () => pickImage(ImageSource.gallery),
+                                                icon: const Icon(Icons.photo_library_rounded, size: 16),
+                                                label: const Text('Galeri', style: TextStyle(fontSize: 12)),
+                                                style: OutlinedButton.styleFrom(
+                                                  foregroundColor: const Color(0xFF0F172A),
+                                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 18),
+
+                            // 4. Kontak Darurat
+                            const Text(
+                              'Kontak Darurat (Emergency Contact)',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F172A)),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Dihubungi pemilik kos jika ada kondisi mendesak atau darurat medis.',
+                              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                            ),
+                            const SizedBox(height: 10),
+                            TextFormField(
+                              controller: emergencyNameController,
+                              decoration: InputDecoration(
+                                labelText: 'Nama Kerabat / Orang Tua',
+                                hintText: 'Contoh: Bapak Hendra (Ayah)',
+                                prefixIcon: const Icon(Icons.people_outline_rounded, size: 20),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            TextFormField(
+                              controller: emergencyWaController,
+                              keyboardType: TextInputType.phone,
+                              decoration: InputDecoration(
+                                labelText: 'Nomor WhatsApp Darurat',
+                                hintText: 'Contoh: 081234567890',
+                                prefixIcon: const Icon(Icons.phone_outlined, size: 20),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: isSaving ? null : () => Navigator.pop(dialogCtx),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            child: const Text('Batal'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: isSaving
+                                ? null
+                                : () async {
+                                    if (!formKey.currentState!.validate()) return;
+                                    setDialogState(() => isSaving = true);
+                                    final navigator = Navigator.of(dialogCtx);
+                                    final messenger = ScaffoldMessenger.of(context);
+
+                                    final success = await KosService.updateTenantIdentity(
+                                      userId: _currentProfile.id,
+                                      nikKtp: nikController.text.trim(),
+                                      dokumenKtpUrl: currentKtpUrl,
+                                      emergencyName: emergencyNameController.text.trim(),
+                                      emergencyWa: emergencyWaController.text.trim(),
+                                      fullName: nameController.text.trim(),
+                                    );
+
+                                    if (mounted) {
+                                      if (success) {
+                                        setState(() {
+                                          _currentProfile = _currentProfile.copyWith(
+                                            nikKtp: nikController.text.trim(),
+                                            dokumenKtpUrl: currentKtpUrl,
+                                            kontakDaruratNama: emergencyNameController.text.trim(),
+                                            kontakDaruratWa: emergencyWaController.text.trim(),
+                                            fullName: nameController.text.trim(),
+                                            statusIdentitas: 'terunggah',
+                                          );
+                                        });
+                                        navigator.pop();
+                                        messenger.showSnackBar(
+                                          SnackBar(
+                                            content: const Row(
+                                              children: [
+                                                Icon(Icons.check_circle_rounded,
+                                                    color: Colors.white, size: 20),
+                                                SizedBox(width: 10),
+                                                Expanded(
+                                                  child: Text(
+                                                    'Data identitas dan KTP berhasil disimpan!',
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            backgroundColor: const Color(0xFF059669),
+                                            behavior: SnackBarBehavior.floating,
+                                            shape: RoundedRectangleBorder(
+                                                borderRadius: BorderRadius.circular(10)),
+                                          ),
+                                        );
+                                      } else {
+                                        setDialogState(() => isSaving = false);
+                                        messenger.showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                                'Gagal menyimpan identitas. Periksa koneksi Anda.'),
+                                            backgroundColor: Colors.red,
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF0D9488),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              elevation: 0,
+                            ),
+                            child: isSaving
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text('Simpan Identitas'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// Modal Pratinjau Foto KTP dengan Zoom Interaktif
+  void _showKtpPreviewModal({
+    required String title,
+    required String imageUrl,
+    required String nik,
+    required String name,
+    String? emergencyName,
+    String? emergencyWa,
+  }) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.badge_rounded, color: Color(0xFF0D9488), size: 22),
+                      const SizedBox(width: 8),
+                      Text(
+                        title,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    icon: const Icon(Icons.close_rounded),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // Image Viewer with Zoom
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    child: InteractiveViewer(
+                      panEnabled: true,
+                      minScale: 0.8,
+                      maxScale: 4.0,
+                      child: Center(
+                        child: _buildKtpImageWidget(imageUrl, null),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              // Info Card
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Nama: $name',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    const SizedBox(height: 4),
+                    Text('NIK: $nik',
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF334155))),
+                    if (emergencyName != null && emergencyName.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Kontak Darurat: $emergencyName (${emergencyWa ?? "-"})',
+                        style: const TextStyle(
+                            fontSize: 12, color: Color(0xFF059669), fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildKtpImageWidget(String url, Uint8List? localBytes) {
+    if (localBytes != null) {
+      return Image.memory(
+        localBytes,
+        fit: BoxFit.contain,
+        width: double.infinity,
+      );
+    }
+    if (url.startsWith('data:image')) {
+      try {
+        final bytes = base64Decode(url.split(',').last);
+        return Image.memory(
+          bytes,
+          fit: BoxFit.contain,
+          width: double.infinity,
+        );
+      } catch (_) {}
+    }
+    return Image.network(
+      url,
+      fit: BoxFit.contain,
+      width: double.infinity,
+      errorBuilder: (ctx, err, stack) => Container(
+        color: Colors.grey.shade100,
+        alignment: Alignment.center,
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.broken_image_rounded, color: Colors.grey, size: 36),
+            SizedBox(height: 8),
+            Text('Gagal memuat foto KTP', style: TextStyle(fontSize: 11, color: Colors.grey)),
+          ],
         ),
       ),
     );

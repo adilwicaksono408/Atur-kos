@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:atur_kos/services/kos_service.dart';
 import 'package:atur_kos/utils/format_utils.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Halaman Alokasi Kamar & Manajemen Penghuni (PRD Modul 2 - US-2.2)
 /// Menghubungkan akun penghuni terdaftar ke kamar kosong
@@ -161,6 +163,7 @@ class _TenantAllocationScreenState extends State<TenantAllocationScreen> {
                       setDialogState(() => selectedProfile = val);
                     },
                   ),
+                  if (selectedProfile != null) _buildTenantKtpBanner(selectedProfile!),
                   const SizedBox(height: 14),
                   const Text('Pilih Kamar Kosong', style: TextStyle(fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
@@ -526,6 +529,8 @@ class _TenantAllocationScreenState extends State<TenantAllocationScreen> {
                                           ),
                                         ),
                                       ),
+                                      const SizedBox(width: 6),
+                                      _buildKtpStatusBadge(p),
                                       if (phone != '-') ...[
                                         const SizedBox(width: 6),
                                         Text(
@@ -538,17 +543,32 @@ class _TenantAllocationScreenState extends State<TenantAllocationScreen> {
                                 ],
                               ),
                             ),
-                            ElevatedButton.icon(
-                              onPressed: () => _showAllocationDialog(p),
-                              icon: const Icon(Icons.meeting_room_rounded, size: 16),
-                              label: const Text('Alokasikan', style: TextStyle(fontSize: 12)),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF1E40AF),
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                elevation: 0,
-                              ),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  tooltip: 'Lihat Identitas & Dokumen KTP',
+                                  icon: Icon(
+                                    _hasKtp(p) ? Icons.badge_rounded : Icons.badge_outlined,
+                                    color: _hasKtp(p) ? const Color(0xFF16A34A) : Colors.grey.shade500,
+                                    size: 22,
+                                  ),
+                                  onPressed: () => _showTenantKtpPreview(p),
+                                ),
+                                const SizedBox(width: 4),
+                                ElevatedButton.icon(
+                                  onPressed: () => _showAllocationDialog(p),
+                                  icon: const Icon(Icons.meeting_room_rounded, size: 16),
+                                  label: const Text('Alokasikan', style: TextStyle(fontSize: 12)),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF1E40AF),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    elevation: 0,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -645,22 +665,57 @@ class _TenantAllocationScreenState extends State<TenantAllocationScreen> {
                                 ],
                               ),
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.green.shade50,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.green.shade200),
-                              ),
-                              child: Text(
-                                'Aktif',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.green.shade700,
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.green.shade200),
+                                  ),
+                                  child: Text(
+                                    'Aktif',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.green.shade700,
+                                    ),
+                                  ),
                                 ),
-                              ),
+                                if (profile != null) ...[
+                                  const SizedBox(height: 4),
+                                  InkWell(
+                                    onTap: () => _showTenantKtpPreview(profile, roomNumber: roomNum),
+                                    borderRadius: BorderRadius.circular(6),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            _hasKtp(profile) ? Icons.badge_rounded : Icons.badge_outlined,
+                                            size: 13,
+                                            color: _hasKtp(profile) ? const Color(0xFF16A34A) : Colors.grey.shade500,
+                                          ),
+                                          const SizedBox(width: 3),
+                                          Text(
+                                            _hasKtp(profile) ? 'KTP' : 'No KTP',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              color: _hasKtp(profile) ? const Color(0xFF16A34A) : Colors.grey.shade500,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                           ],
                         ),
@@ -669,6 +724,312 @@ class _TenantAllocationScreenState extends State<TenantAllocationScreen> {
                 ],
               ),
             ),
+    );
+  }
+
+  // ===========================================================================
+  // HELPER & PREVIEW DOKUMEN KTP PENGHUNI
+  // ===========================================================================
+
+  bool _hasKtp(Map<String, dynamic> p) {
+    final url = p['dokumen_ktp_url']?.toString() ?? p['foto_ktp_url']?.toString();
+    return url != null && url.trim().isNotEmpty;
+  }
+
+  Widget _buildKtpStatusBadge(Map<String, dynamic> p) {
+    final hasKtp = _hasKtp(p);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: hasKtp ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: hasKtp ? const Color(0xFF86EFAC) : const Color(0xFFFDE68A),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            hasKtp ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
+            color: hasKtp ? const Color(0xFF16A34A) : const Color(0xFFD97706),
+            size: 11,
+          ),
+          const SizedBox(width: 3),
+          Text(
+            hasKtp ? 'KTP Terlampir' : 'Belum Ada KTP',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: hasKtp ? const Color(0xFF166534) : const Color(0xFF92400E),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTenantKtpBanner(Map<String, dynamic> p) {
+    final hasKtp = _hasKtp(p);
+    final nik = p['nik_ktp']?.toString() ?? '-';
+
+    if (hasKtp) {
+      return Container(
+        margin: const EdgeInsets.only(top: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFDCFCE7),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFF86EFAC)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Foto KTP Terlampir',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF166534)),
+                  ),
+                  Text(
+                    'NIK: $nik',
+                    style: const TextStyle(fontSize: 11, color: Color(0xFF166534)),
+                  ),
+                ],
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () => _showTenantKtpPreview(p),
+              icon: const Icon(Icons.visibility_rounded, size: 14),
+              label: const Text('Lihat KTP', style: TextStyle(fontSize: 11)),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF166534),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFFDE68A)),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 18),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Perhatian: Calon penghuni belum mengunggah foto KTP. Anda tetap dapat melanjutkan alokasi kamar sekarang.',
+              style: TextStyle(fontSize: 11, color: Color(0xFF92400E)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showTenantKtpPreview(Map<String, dynamic> p, {String? roomNumber}) {
+    final name = _resolveProfileName(p);
+    final nik = p['nik_ktp']?.toString() ?? '-';
+    final phone = p['nomor_wa']?.toString() ?? '-';
+    final emergencyName = p['kontak_darurat_nama']?.toString();
+    final emergencyWa = p['kontak_darurat_wa']?.toString();
+    final ktpUrl = p['dokumen_ktp_url']?.toString() ?? p['foto_ktp_url']?.toString() ?? '';
+    final hasKtp = ktpUrl.trim().isNotEmpty;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 520, maxHeight: 650),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.badge_rounded, color: Color(0xFF1E40AF), size: 24),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Identitas Penghuni: $name',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    icon: const Icon(Icons.close_rounded),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (hasKtp) ...[
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: Container(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      child: InteractiveViewer(
+                        panEnabled: true,
+                        minScale: 0.8,
+                        maxScale: 4.0,
+                        child: Center(
+                          child: _buildKtpImageWidget(ktpUrl),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ] else ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFFBEB),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFFDE68A)),
+                  ),
+                  child: Column(
+                    children: [
+                      const Icon(Icons.warning_amber_rounded, size: 40, color: Color(0xFFD97706)),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Foto KTP Belum Diunggah',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF92400E)),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Penghuni belum melampirkan foto dokumen KTP di portal penghuni mereka.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 12, color: Colors.amber.shade900),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (roomNumber != null) ...[
+                      Text('Alokasi: Kamar $roomNumber',
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1E40AF), fontSize: 13)),
+                      const SizedBox(height: 4),
+                    ],
+                    Text('Nama Lengkap: $name', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 4),
+                    Text('Nomor NIK KTP: $nik', style: const TextStyle(fontSize: 12, color: Color(0xFF334155))),
+                    const SizedBox(height: 4),
+                    Text('Nomor WhatsApp: $phone', style: const TextStyle(fontSize: 12, color: Color(0xFF334155))),
+                    if (emergencyName != null && emergencyName.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Kontak Darurat: $emergencyName (${emergencyWa ?? "-"})',
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF059669), fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  if (phone != '-' && phone.isNotEmpty) ...[
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        String clean = phone.replaceAll(RegExp(r'[^0-9]'), '');
+                        if (clean.startsWith('0')) clean = '62${clean.substring(1)}';
+                        final msg = Uri.encodeComponent(
+                          'Halo Kak $name, mohon lengkapi identitas dan foto KTP Anda di aplikasi Atur Kos untuk verifikasi administrasi kos.',
+                        );
+                        final uri = Uri.parse('https://wa.me/$clean?text=$msg');
+                        try {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        } catch (_) {}
+                      },
+                      icon: const Icon(Icons.chat_rounded, size: 16, color: Color(0xFF059669)),
+                      label: const Text('Ingatkan via WA', style: TextStyle(fontSize: 12, color: Color(0xFF059669))),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFF059669)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0F172A),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      elevation: 0,
+                    ),
+                    child: const Text('Tutup'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildKtpImageWidget(String url) {
+    if (url.startsWith('data:image')) {
+      try {
+        final bytes = base64Decode(url.split(',').last);
+        return Image.memory(
+          bytes,
+          fit: BoxFit.contain,
+          width: double.infinity,
+        );
+      } catch (_) {}
+    }
+    return Image.network(
+      url,
+      fit: BoxFit.contain,
+      width: double.infinity,
+      errorBuilder: (ctx, err, stack) => Container(
+        color: Colors.grey.shade100,
+        alignment: Alignment.center,
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.broken_image_rounded, color: Colors.grey, size: 36),
+            SizedBox(height: 8),
+            Text('Gagal memuat foto KTP', style: TextStyle(fontSize: 11, color: Colors.grey)),
+          ],
+        ),
+      ),
     );
   }
 }

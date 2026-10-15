@@ -64,7 +64,7 @@ enum SubscriptionTier {
 
   String get label => this == SubscriptionTier.juragan ? 'Paket Juragan' : 'Paket Starter (Gratis)';
 
-  int get defaultMaxRooms => this == SubscriptionTier.juragan ? 25 : 5;
+  int get defaultMaxRooms => this == SubscriptionTier.juragan ? 999999 : 5;
 }
 
 /// Model Data Properti Kos Multi-Tenant
@@ -119,6 +119,7 @@ class KostModel {
   bool get isSuspended => statusVerifikasi == KostStatus.suspended;
   bool get isJuragan => tier == SubscriptionTier.juragan;
   bool get isStarter => tier == SubscriptionTier.starter;
+  bool get hasUnlimitedRooms => isJuragan || maxRooms >= 9999;
 
   factory KostModel.fromMap(Map<String, dynamic> map) {
     double? parseCoord(dynamic val) {

@@ -92,6 +92,12 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     role user_role NOT NULL DEFAULT 'tenant',
     avatar_url TEXT,
     fcm_token TEXT,
+    -- Identitas Legalitas Penghuni & Kontak Darurat (KYC Tenant)
+    nik_ktp VARCHAR(20),
+    dokumen_ktp_url TEXT,
+    kontak_darurat_nama VARCHAR(100),
+    kontak_darurat_wa VARCHAR(20),
+    status_identitas VARCHAR(30) DEFAULT 'unverified',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -310,7 +316,7 @@ WHERE id IN (
 
 -- Buat kos awal terverifikasi untuk pengujian jika tabel kosts kosong
 INSERT INTO public.kosts (nama_kost, alamat, nomor_kontak, rekening_bank, nama_pemilik_rekening, status_verifikasi, tier, max_rooms)
-SELECT 'Kos Princess', 'Jl. Kaliurang KM 5, Sleman, D.I. Yogyakarta', '628123456789', 'BCA 1234567890', 'Ibu Rina', 'active', 'juragan', 25
+SELECT 'Kos Princess', 'Jl. Kaliurang KM 5, Sleman, D.I. Yogyakarta', '628123456789', 'BCA 1234567890', 'Ibu Rina', 'active', 'juragan', 999999
 WHERE NOT EXISTS (SELECT 1 FROM public.kosts WHERE nama_kost = 'Kos Princess');
 
 COMMIT;

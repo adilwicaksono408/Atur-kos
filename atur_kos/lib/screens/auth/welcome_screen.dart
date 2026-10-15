@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:atur_kos/screens/auth/login_screen.dart';
 import 'package:atur_kos/screens/auth/register_screen.dart';
+import 'package:atur_kos/screens/payment/public_receipt_verification_screen.dart';
 import 'package:atur_kos/widgets/google_sign_in_button.dart';
 
 /// Halaman Sambutan Utama (Welcome Screen)
@@ -204,6 +205,55 @@ class WelcomeScreen extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      // Akses Cepat: Portal Verifikasi Kuitansi Publik (Tanpa Login)
+                      InkWell(
+                        onTap: () => PublicReceiptVerificationScreen.open(context),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.qr_code_scanner_rounded,
+                                size: 18,
+                                color: theme.colorScheme.primary,
+                              ),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Cek Keabsahan Kuitansi Digital',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF334155),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFDCFCE7),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Text(
+                                  'Tanpa Login',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF15803D),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),

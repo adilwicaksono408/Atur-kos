@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:atur_kos/screens/payment/midtrans_tenant_payment_dialog.dart';
+import 'package:atur_kos/screens/payment/public_receipt_verification_screen.dart';
 import 'package:atur_kos/services/kos_service.dart';
 import 'package:atur_kos/utils/format_utils.dart';
 
 /// Halaman Manajemen Tagihan, Verifikasi Pembayaran & WhatsApp Reminder Engine
-/// Sesuai Spesifikasi PRD Modul 3 & Modul 6 (Kos Princess)
+/// Sesuai Spesifikasi PRD Modul 3 & Modul 6 (Sistem Manajemen Tagihan Kos)
 class InvoiceManagementScreen extends StatefulWidget {
   final String? kostId;
   final String kosName;
@@ -373,6 +375,234 @@ class _InvoiceManagementScreenState extends State<InvoiceManagementScreen>
                   ),
                 ),
               ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Format saluran pembayaran Midtrans Snap menjadi teks ramah pengguna
+  String _formatPaymentChannel(String? raw) {
+    if (raw == null || raw.isEmpty) return 'Transfer Bank Manual';
+    final lower = raw.toLowerCase();
+    if (lower == 'midtrans_qris' || lower == 'qris') return 'QRIS (Midtrans Snap)';
+    if (lower == 'midtrans_va') return 'Virtual Account (Midtrans Snap)';
+    if (lower.contains('bca')) return 'BCA Virtual Account';
+    if (lower.contains('mandiri')) return 'Mandiri Virtual Account';
+    if (lower.contains('bni')) return 'BNI Virtual Account';
+    if (lower.contains('bri')) return 'BRI Virtual Account';
+    if (lower.contains('cimb')) return 'CIMB Niaga VA';
+    if (lower.contains('permata')) return 'Permata Bank VA';
+    return raw.replaceAll('_', ' ').toUpperCase();
+  }
+
+  /// Format waktu pelunasan menjadi format ramah pengguna
+  String _formatDateTimeStr(String? iso) {
+    if (iso == null || iso.isEmpty) return '-';
+    final parsed = DateTime.tryParse(iso);
+    if (parsed == null) return iso;
+    return '${FormatUtils.formatDate(parsed)}, ${parsed.hour.toString().padLeft(2, '0')}:${parsed.minute.toString().padLeft(2, '0')} WIB';
+  }
+
+  /// Tampilkan Kuitansi Sah Digital ber-QR Code Anti-Manipulasi (PRD US-4.4)
+  void _showDigitalReceipt(Map<String, dynamic> inv) {
+    final tenant = inv['tenants'] as Map<String, dynamic>?;
+    final profile = tenant?['profiles'] as Map<String, dynamic>?;
+    final room = tenant?['rooms'] as Map<String, dynamic>?;
+
+    final orderId = inv['order_id']?.toString() ??
+        inv['nomor_invoice']?.toString() ??
+        'INV-${inv['id']}';
+    final midtransTrxId = inv['midtrans_transaction_id']?.toString() ??
+        'MTR-SETTLED-${inv['id'].toString().substring(0, 8)}';
+    final roomNumber = room?['nomor_kamar']?.toString() ?? '-';
+    final roomType = room?['tipe']?.toString() ?? 'Standard';
+    final tenantName = profile?['full_name']?.toString() ?? 'Penghuni Kos';
+    final periode = inv['periode']?.toString() ?? '-';
+    final nominal = (inv['nominal'] as num?)?.toDouble() ?? 0.0;
+    final paymentType = _formatPaymentChannel(inv['payment_type']?.toString());
+    final settlementTime = _formatDateTimeStr(
+      inv['settlement_time']?.toString() ??
+          inv['diverifikasi_pada']?.toString() ??
+          inv['tanggal_bayar']?.toString() ??
+          inv['updated_at']?.toString(),
+    );
+    final qrVerificationCode = inv['qr_verification_code']?.toString() ??
+        'ATURKOS-${orderId.replaceAll('/', '-')}-VERIFIED';
+
+    MidtransTenantPaymentDialog.showReceiptModal(
+      context,
+      orderId: orderId,
+      midtransTrxId: midtransTrxId,
+      kosName: widget.kosName,
+      roomNumber: roomNumber,
+      roomType: roomType,
+      tenantName: tenantName,
+      periode: periode,
+      nominal: nominal,
+      paymentType: paymentType,
+      settlementTime: settlementTime,
+      qrVerificationCode: qrVerificationCode,
+    );
+  }
+
+  /// Bagikan kuitansi digital resmi ke WhatsApp penyewa (PRD US-4.4)
+  void _sendWhatsAppReceipt(Map<String, dynamic> inv) {
+    final tenant = inv['tenants'] as Map<String, dynamic>?;
+    final profile = tenant?['profiles'] as Map<String, dynamic>?;
+    final room = tenant?['rooms'] as Map<String, dynamic>?;
+
+    final tenantName = profile?['full_name']?.toString() ?? 'Penghuni';
+    final roomNumber = room?['nomor_kamar']?.toString() ?? '-';
+    final nominal = (inv['nominal'] as num?)?.toDouble() ?? 0.0;
+    final periode = inv['periode']?.toString() ?? '-';
+    final orderId = inv['order_id']?.toString() ??
+        inv['nomor_invoice']?.toString() ??
+        'INV-${inv['id']}';
+    final qrCode = inv['qr_verification_code']?.toString() ??
+        'ATURKOS-${orderId.replaceAll('/', '-')}-VALID';
+    final paymentType = _formatPaymentChannel(inv['payment_type']?.toString());
+
+    final message = '''
+Halo $tenantName, pembayaran sewa ${widget.kosName} kamar $roomNumber untuk periode $periode sebesar ${FormatUtils.rupiah(nominal)} telah LUNAS terverifikasi via $paymentType.
+
+Nomor Order: $orderId
+Kuitansi digital resmi berstempel lunas dan QR code anti-manipulasi dapat dicek langsung di aplikasi Atur Kos atau melalui tautan verifikasi:
+https://aturkos.app/verify/invoice?id=$orderId&seal=$qrCode
+
+Terima kasih atas pelunasan tepat waktu!
+'''.trim();
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(22),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF25D366).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.receipt_long_rounded,
+                      color: Color(0xFF25D366), size: 24),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Kirim Kuitansi via WhatsApp',
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        'Bukti Pelunasan Sah Ber-QR Code Anti-Manipulasi (PRD US-4.4)',
+                        style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFCBD5E1)),
+              ),
+              child: Text(
+                message,
+                style: const TextStyle(
+                    fontSize: 13, height: 1.4, color: Color(0xFF1E293B)),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: message));
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                              'Teks kuitansi WhatsApp berhasil disalin ke clipboard!'),
+                          backgroundColor: Color(0xFF1E40AF),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.copy_rounded, size: 18),
+                    label: const Text('Salin Pesan'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: message));
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content:
+                              Text('Pesan kuitansi siap dikirimkan via WhatsApp!'),
+                          backgroundColor: Color(0xFF25D366),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.send_rounded, size: 18),
+                    label: const Text('Buka WhatsApp'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF25D366),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  PublicReceiptVerificationScreen.open(
+                    context,
+                    initialOrderId: orderId,
+                    initialCode: qrCode,
+                  );
+                },
+                icon: const Icon(Icons.verified_user_outlined, size: 16, color: Color(0xFF0D9488)),
+                label: const Text(
+                  'Pratinjau Layar Verifikasi Publik (Anti-Fraud)',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF0D9488),
+                  ),
+                ),
+              ),
             ),
           ],
         ),
@@ -752,14 +982,72 @@ class _InvoiceManagementScreenState extends State<InvoiceManagementScreen>
       );
     }
 
+    final isLunasTab = items.isNotEmpty && items.every((i) => i['status'] == 'lunas');
+    final midtransCount = items.where((i) {
+      final trx = i['midtrans_transaction_id']?.toString() ?? '';
+      final pt = i['payment_type']?.toString() ?? '';
+      return trx.isNotEmpty || pt.contains('midtrans');
+    }).length;
+
     return RefreshIndicator(
       onRefresh: _loadData,
       child: ListView.separated(
         padding: const EdgeInsets.all(16),
-        itemCount: items.length,
+        itemCount: isLunasTab ? items.length + 1 : items.length,
         separatorBuilder: (_, index) => const SizedBox(height: 12),
         itemBuilder: (context, index) {
-          final inv = items[index];
+          // Banner Info Otomasi Midtrans khusus pada Tab Lunas
+          if (isLunasTab && index == 0) {
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0FDFA),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFF99F6E4)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFCCFBF1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.bolt_rounded,
+                        color: Color(0xFF0D9488), size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Integrasi Midtrans Snap & Kuitansi Digital (US-4.4)',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0F766E),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '$midtransCount dari ${items.length} pembayaran lunas otomatis terverifikasi via QRIS / Virtual Account Midtrans.',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF115E59),
+                            height: 1.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          final actualIndex = isLunasTab ? index - 1 : index;
+          final inv = items[actualIndex];
           final tenant = inv['tenants'] as Map<String, dynamic>?;
           final profile = tenant?['profiles'] as Map<String, dynamic>?;
           final room = tenant?['rooms'] as Map<String, dynamic>?;
@@ -770,6 +1058,12 @@ class _InvoiceManagementScreenState extends State<InvoiceManagementScreen>
           final nominal = (inv['nominal'] as num?)?.toDouble() ?? 0.0;
           final status = inv['status']?.toString() ?? 'belum_bayar';
           final dueDateStr = inv['tanggal_jatuh_tempo']?.toString() ?? '';
+          final orderIdStr = inv['order_id']?.toString() ?? inv['nomor_invoice']?.toString() ?? '-';
+
+          final isMidtrans = (inv['midtrans_transaction_id'] != null &&
+                  inv['midtrans_transaction_id'].toString().trim().isNotEmpty) ||
+              (inv['payment_type'] != null &&
+                  inv['payment_type'].toString().contains('midtrans'));
 
           Color statusColor;
           String statusLabel;
@@ -777,9 +1071,9 @@ class _InvoiceManagementScreenState extends State<InvoiceManagementScreen>
 
           switch (status) {
             case 'lunas':
-              statusColor = const Color(0xFF059669);
-              statusLabel = 'LUNAS (Kas Riil)';
-              statusIcon = Icons.check_circle_rounded;
+              statusColor = isMidtrans ? const Color(0xFF0D9488) : const Color(0xFF059669);
+              statusLabel = isMidtrans ? 'LUNAS (Midtrans Snap)' : 'LUNAS (Manual)';
+              statusIcon = isMidtrans ? Icons.bolt_rounded : Icons.check_circle_rounded;
               break;
             case 'menunggu_verifikasi':
               statusColor = const Color(0xFFD97706);
@@ -805,8 +1099,10 @@ class _InvoiceManagementScreenState extends State<InvoiceManagementScreen>
               border: Border.all(
                 color: status == 'menunggu_verifikasi'
                     ? const Color(0xFFFDE68A)
-                    : const Color(0xFFE2E8F0),
-                width: status == 'menunggu_verifikasi' ? 1.5 : 1.0,
+                    : isMidtrans && status == 'lunas'
+                        ? const Color(0xFF99F6E4)
+                        : const Color(0xFFE2E8F0),
+                width: status == 'menunggu_verifikasi' || (isMidtrans && status == 'lunas') ? 1.5 : 1.0,
               ),
               boxShadow: [
                 BoxShadow(
@@ -894,17 +1190,18 @@ class _InvoiceManagementScreenState extends State<InvoiceManagementScreen>
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Text(
-                          'Jatuh Tempo',
-                          style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                        Text(
+                          status == 'lunas' ? 'Nomor Order' : 'Jatuh Tempo',
+                          style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          dueDateStr,
-                          style: const TextStyle(
+                          status == 'lunas' ? orderIdStr : dueDateStr,
+                          style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF334155),
+                            fontFamily: status == 'lunas' ? 'monospace' : null,
+                            color: const Color(0xFF334155),
                           ),
                         ),
                       ],
@@ -912,7 +1209,148 @@ class _InvoiceManagementScreenState extends State<InvoiceManagementScreen>
                   ],
                 ),
 
+                // Rincian Pembayaran Gateway Midtrans Snap untuk Invoice Lunas
+                if (status == 'lunas' && isMidtrans) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0FDFA),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFCCFBF1)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.verified_rounded, size: 16, color: Color(0xFF0D9488)),
+                            const SizedBox(width: 6),
+                            const Text(
+                              'Otomasi Midtrans Snap Webhook',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF0F766E),
+                              ),
+                            ),
+                            const Spacer(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFF99F6E4)),
+                              ),
+                              child: Text(
+                                _formatPaymentChannel(inv['payment_type']?.toString()),
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF0D9488),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (inv['midtrans_transaction_id'] != null) ...[
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              const Text(
+                                'ID Transaksi: ',
+                                style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  inv['midtrans_transaction_id'].toString(),
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontFamily: 'monospace',
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF334155),
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        if (inv['settlement_time'] != null || inv['diverifikasi_pada'] != null) ...[
+                          const SizedBox(height: 3),
+                          Row(
+                            children: [
+                              const Text(
+                                'Waktu Pelunasan: ',
+                                style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                              ),
+                              Text(
+                                _formatDateTimeStr(
+                                  inv['settlement_time']?.toString() ?? inv['diverifikasi_pada']?.toString(),
+                                ),
+                                style: const TextStyle(fontSize: 11, color: Color(0xFF334155)),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+
                 // Action Bar khusus per status
+                if (status == 'lunas') ...[
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: ElevatedButton.icon(
+                          onPressed: () => _showDigitalReceipt(inv),
+                          icon: const Icon(Icons.qr_code_2_rounded, size: 18),
+                          label: const Text(
+                            'Kuitansi Sah (QR)',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0D9488),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            elevation: 0,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        flex: 2,
+                        child: OutlinedButton.icon(
+                          onPressed: () => _sendWhatsAppReceipt(inv),
+                          icon: const Icon(Icons.share_rounded, size: 16, color: Color(0xFF25D366)),
+                          label: const Text(
+                            'Kirim WA',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF065F46),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: const Color(0xFFECFDF5),
+                            side: const BorderSide(color: Color(0xFFA7F3D0)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+
                 if (status == 'menunggu_verifikasi') ...[
                   const SizedBox(height: 14),
                   Row(

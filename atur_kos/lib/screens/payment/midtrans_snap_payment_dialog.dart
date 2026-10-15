@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:atur_kos/models/kost_model.dart';
 import 'package:atur_kos/services/kos_service.dart';
 import 'package:atur_kos/utils/format_utils.dart';
@@ -508,7 +509,7 @@ class _MidtransSnapPaymentDialogState extends State<MidtransSnapPaymentDialog> {
                       ),
                       const SizedBox(height: 4),
                       const Text(
-                        'Alur ini berjalan di lingkungan sandbox Midtrans resmi. Tanpa uang sungguhan, sistem akan otomatis memutakhirkan kuota properti menjadi 25 kamar dan menghitung tanggal kedaluwarsa secara nyata di database Supabase.',
+                        'Alur ini berjalan di lingkungan sandbox Midtrans resmi. Tanpa uang sungguhan, sistem akan otomatis memutakhirkan properti kos ke Paket Juragan dengan akses kamar tanpa batas (unlimited) dan menghitung tanggal kedaluwarsa secara nyata di database Supabase.',
                         style: TextStyle(fontSize: 11, color: Color(0xFF78350F), height: 1.4),
                       ),
                       const SizedBox(height: 12),
@@ -622,7 +623,7 @@ class _MidtransSnapPaymentDialogState extends State<MidtransSnapPaymentDialog> {
                 const Divider(height: 16),
                 _buildReceiptRow('Total Dibayar', FormatUtils.formatRupiah(_grossAmount)),
                 const Divider(height: 16),
-                _buildReceiptRow('Status Kuota Kamar', '25 Kamar (Maksimal)'),
+                _buildReceiptRow('Status Kuota Kamar', 'Tanpa Batas (Unlimited ♾️)'),
                 const Divider(height: 16),
                 _buildReceiptRow('Masa Aktif Hingga', expiryFormatted, isHighlight: true),
               ],
@@ -800,11 +801,22 @@ class _MidtransSnapPaymentDialogState extends State<MidtransSnapPaymentDialog> {
                 ),
               ],
             ),
-            child: SizedBox(
-              width: 160,
-              height: 160,
-              child: CustomPaint(
-                painter: _QrisPatternPainter(),
+            child: Center(
+              child: QrImageView(
+                data: 'https://simulator.sandbox.midtrans.com/qris/pay?order_id=$_orderId&gross_amount=$_grossAmount',
+                version: QrVersions.auto,
+                size: 154.0,
+                backgroundColor: Colors.white,
+                errorCorrectionLevel: QrErrorCorrectLevel.M,
+                padding: EdgeInsets.zero,
+                eyeStyle: const QrEyeStyle(
+                  eyeShape: QrEyeShape.square,
+                  color: Color(0xFF0F172A),
+                ),
+                dataModuleStyle: const QrDataModuleStyle(
+                  dataModuleShape: QrDataModuleShape.square,
+                  color: Color(0xFF0F172A),
+                ),
               ),
             ),
           ),
@@ -1000,105 +1012,3 @@ class _MidtransSnapPaymentDialogState extends State<MidtransSnapPaymentDialog> {
   }
 }
 
-/// CustomPainter untuk menggambar pola QR Code QRIS yang tajam dan realistis
-class _QrisPatternPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFF0F172A)
-      ..style = PaintingStyle.fill;
-
-    const gridSize = 21;
-    final cellSize = size.width / gridSize;
-
-    void drawFinderPattern(int startX, int startY) {
-      canvas.drawRect(
-        Rect.fromLTWH(startX * cellSize, startY * cellSize, 7 * cellSize, 7 * cellSize),
-        paint,
-      );
-      final whitePaint = Paint()..color = Colors.white;
-      canvas.drawRect(
-        Rect.fromLTWH((startX + 1) * cellSize, (startY + 1) * cellSize, 5 * cellSize, 5 * cellSize),
-        whitePaint,
-      );
-      canvas.drawRect(
-        Rect.fromLTWH((startX + 2) * cellSize, (startY + 2) * cellSize, 3 * cellSize, 3 * cellSize),
-        paint,
-      );
-    }
-
-    // 3 Finder Patterns di sudut
-    drawFinderPattern(0, 0);
-    drawFinderPattern(14, 0);
-    drawFinderPattern(0, 14);
-
-    // Timing patterns horizontal & vertikal
-    for (int i = 8; i < 13; i += 2) {
-      canvas.drawRect(Rect.fromLTWH(i * cellSize, 6 * cellSize, cellSize, cellSize), paint);
-      canvas.drawRect(Rect.fromLTWH(6 * cellSize, i * cellSize, cellSize, cellSize), paint);
-    }
-
-    // Alignment pattern
-    canvas.drawRect(Rect.fromLTWH(14 * cellSize, 14 * cellSize, 3 * cellSize, 3 * cellSize), paint);
-    canvas.drawRect(Rect.fromLTWH(15 * cellSize, 15 * cellSize, cellSize, cellSize), Paint()..color = Colors.white);
-
-    // Mock pseudo-random data modules
-    final rand = Random(42);
-    for (int r = 0; r < gridSize; r++) {
-      for (int c = 0; c < gridSize; c++) {
-        final inFinder1 = r < 7 && c < 7;
-        final inFinder2 = r < 7 && c >= 14;
-        final inFinder3 = r >= 14 && c < 7;
-        final inCenter = (r >= 8 && r <= 12) && (c >= 8 && c <= 12);
-        final inAlign = (r >= 14 && r <= 16) && (c >= 14 && c <= 16);
-
-        if (!inFinder1 && !inFinder2 && !inFinder3 && !inCenter && !inAlign) {
-          if (rand.nextBool()) {
-            canvas.drawRect(
-              Rect.fromLTWH(c * cellSize, r * cellSize, cellSize * 0.9, cellSize * 0.9),
-              paint,
-            );
-          }
-        }
-      }
-    }
-
-    // Emblem QRIS Resmi di tengah
-    final centerRect = Rect.fromLTWH(
-      size.width * 0.35,
-      size.height * 0.35,
-      size.width * 0.3,
-      size.height * 0.3,
-    );
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(centerRect, const Radius.circular(6)),
-      Paint()..color = const Color(0xFFDC2626), // Merah QRIS
-    );
-
-    // Tulisan QRIS di emblem
-    final textPainter = TextPainter(
-      text: const TextSpan(
-        text: 'QRIS',
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 10,
-          fontWeight: FontWeight.w900,
-          letterSpacing: 0.5,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
-    textPainter.layout();
-    textPainter.paint(
-      canvas,
-      Offset(
-        centerRect.center.dx - (textPainter.width / 2),
-        centerRect.center.dy - (textPainter.height / 2),
-      ),
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}

@@ -11,6 +11,7 @@ import 'package:atur_kos/screens/owner/invoice_management_screen.dart';
 import 'package:atur_kos/screens/owner/tenant_allocation_screen.dart';
 import 'package:atur_kos/screens/owner/complaint_management_screen.dart';
 import 'package:atur_kos/screens/owner/room_poster_generator_screen.dart';
+import 'package:atur_kos/screens/owner/financial_report_screen.dart';
 import 'package:atur_kos/screens/payment/midtrans_snap_payment_dialog.dart';
 import 'package:atur_kos/utils/format_utils.dart';
 
@@ -80,7 +81,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
     final metaKosName = Supabase.instance.client.auth.currentUser?.userMetadata?['nama_kost']?.toString();
     final kosName = _kosProfile?['nama_kost']?.toString() ??
         metaKosName ??
-        'Kos Princess';
+        'Properti Kos';
     final resolvedKostId = _kosProfile?['id']?.toString() ?? widget.profile.kostId;
 
     final updated = await Navigator.push<bool>(
@@ -425,7 +426,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                       children: [
                         Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 16),
                         SizedBox(width: 8),
-                        Expanded(child: Text('Kapasitas hingga 25 Kamar (Starter maks 5)', style: TextStyle(fontSize: 11, color: Color(0xFF334155)))),
+                        Expanded(child: Text('Kapasitas Kamar Tanpa Batas / Unlimited (Starter maks 5)', style: TextStyle(fontSize: 11, color: Color(0xFF334155)))),
                       ],
                     ),
                     SizedBox(height: 5),
@@ -674,7 +675,8 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final kosName = _kosProfile?['nama_kost']?.toString() ?? 'Kos Princess';
+    final metaKosName = Supabase.instance.client.auth.currentUser?.userMetadata?['nama_kost']?.toString();
+    final kosName = _kosProfile?['nama_kost']?.toString() ?? metaKosName ?? 'Properti Kos';
     final resolvedKostId = widget.profile.kostId ?? _kosProfile?['id']?.toString();
     final isVerified = _kosProfile?['status_verifikasi'] == 'active';
     final isJuragan = _kosProfile?['tier']?.toString().toLowerCase() == 'juragan';
@@ -1190,7 +1192,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                             Row(
                               children: [
                                 Text(
-                                  _kosProfile?['kode_kost']?.toString() ?? 'PRINCESS',
+                                  _kosProfile?['kode_kost']?.toString() ?? '-',
                                   style: const TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
@@ -1233,7 +1235,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                       ElevatedButton.icon(
                         onPressed: () {
                           final code =
-                              _kosProfile?['kode_kost']?.toString() ?? 'PRINCESS';
+                              _kosProfile?['kode_kost']?.toString() ?? '';
                           _guardedFeatureAction('Bagikan Kode Undangan', () {
                             _shareInvitationCode(context, code, kosName);
                           });
@@ -1315,18 +1317,19 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                         _buildMetricCard(
                           title: 'Kas Masuk Riil',
                           value: FormatUtils.compactRupiah(_summary.pemasukanKasRiil),
-                          subtext: 'Kas masuk lunas bulan ini',
+                          subtext: 'Buku kas & laba bersih',
                           icon: Icons.account_balance_wallet_rounded,
                           color: const Color(0xFF059669),
                           isLocked: !isVerified,
                           onTap: () {
-                            _guardedFeatureAction('Kas Masuk Riil & Tagihan', () {
+                            _guardedFeatureAction('Buku Kas & Arus Kas', () {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (context) => InvoiceManagementScreen(
+                                  builder: (context) => FinancialReportScreen(
                                     kostId: resolvedKostId,
                                     kosName: kosName,
+                                    isJuragan: isJuragan,
                                   ),
                                 ),
                               ).then((_) => _fetchDashboardData());
@@ -1449,12 +1452,12 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                     Expanded(
                       child: _buildActionTile(
                         icon: Icons.receipt_long_rounded,
-                        color: const Color(0xFF059669),
-                        title: 'Smart Billing & Kas',
+                        color: const Color(0xFF0284C7),
+                        title: 'Smart Billing',
                         subtitle: 'Tagihan & Pengingat WA',
                         isLocked: !isVerified,
                         onTap: () {
-                          _guardedFeatureAction('Smart Billing & Kas', () {
+                          _guardedFeatureAction('Smart Billing', () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -1469,6 +1472,34 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                       ),
                     ),
                     const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildActionTile(
+                        icon: Icons.analytics_rounded,
+                        color: const Color(0xFF059669),
+                        title: 'Buku Kas & Arus Kas',
+                        subtitle: 'Visualisasi Laba & Biaya',
+                        isLocked: !isVerified,
+                        onTap: () {
+                          _guardedFeatureAction('Buku Kas & Arus Kas', () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => FinancialReportScreen(
+                                  kostId: resolvedKostId,
+                                  kosName: kosName,
+                                  isJuragan: isJuragan,
+                                ),
+                              ),
+                            ).then((_) => _fetchDashboardData());
+                          });
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
                     Expanded(
                       child: _buildActionTile(
                         icon: Icons.build_circle_rounded,
@@ -1491,36 +1522,36 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                         },
                       ),
                     ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildActionTile(
+                        icon: Icons.campaign_rounded,
+                        color: const Color(0xFFD97706),
+                        title: 'Poster Promosi AI',
+                        subtitle: isJuragan ? 'Pemasaran & Radar H-30' : '⭐ Fitur Paket Juragan',
+                        isLocked: !isVerified,
+                        isPremium: true,
+                        isJuragan: isJuragan,
+                        onTap: () {
+                          if (!isVerified) {
+                            _guardedFeatureAction('Poster Promosi AI & Radar H-30', () {});
+                          } else if (!isJuragan) {
+                            _showPremiumUpgradeDialog(featureName: 'Poster Promosi AI & Radar H-30');
+                          } else {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => RoomPosterGeneratorScreen(
+                                  kostId: resolvedKostId,
+                                  kosName: kosName,
+                                ),
+                              ),
+                            ).then((_) => _fetchDashboardData());
+                          }
+                        },
+                      ),
+                    ),
                   ],
-                ),
-                const SizedBox(height: 12),
-                _buildActionTile(
-                  icon: Icons.campaign_rounded,
-                  color: const Color(0xFFD97706),
-                  title: 'Poster Promosi AI & Radar H-30',
-                  subtitle: isJuragan
-                      ? 'Pemasaran kamar kosong & radar konfirmasi akhir sewa'
-                      : '⭐ Fitur Eksklusif Paket Juragan (Berlangganan)',
-                  isLocked: !isVerified,
-                  isPremium: true,
-                  isJuragan: isJuragan,
-                  onTap: () {
-                    if (!isVerified) {
-                      _guardedFeatureAction('Poster Promosi AI & Radar H-30', () {});
-                    } else if (!isJuragan) {
-                      _showPremiumUpgradeDialog(featureName: 'Poster Promosi AI & Radar H-30');
-                    } else {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => RoomPosterGeneratorScreen(
-                            kostId: resolvedKostId,
-                            kosName: kosName,
-                          ),
-                        ),
-                      ).then((_) => _fetchDashboardData());
-                    }
-                  },
                 ),
 
                 const SizedBox(height: 32),

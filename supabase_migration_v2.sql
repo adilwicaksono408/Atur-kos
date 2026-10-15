@@ -94,7 +94,7 @@ ADD CONSTRAINT invoices_tenant_id_fkey
     REFERENCES public.tenants(id)
     ON DELETE CASCADE;
 
--- 4. VALIDASI KUOTA KAMAR OTOMATIS (Sesuai Paket Starter max 5 vs Juragan max 25)
+-- 4. VALIDASI KUOTA KAMAR OTOMATIS (Paket Starter max 5 vs Juragan UNLIMITED)
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.check_room_quota()
 RETURNS trigger AS $$
@@ -107,12 +107,17 @@ BEGIN
     FROM public.kosts
     WHERE id = NEW.kost_id;
 
+    -- JIKA PAKET JURAGAN (PREMIUM): Bebas akses kamar tanpa batas (Unlimited)
+    IF kost_tier = 'juragan' THEN
+        RETURN NEW;
+    END IF;
+
     SELECT COUNT(*) INTO current_count
     FROM public.rooms
     WHERE kost_id = NEW.kost_id;
 
-    IF current_count >= allowed_max THEN
-        RAISE EXCEPTION 'Batas kuota kamar terlampaui! Kos Anda menggunakan Paket % (Maksimal % kamar). Silakan upgrade ke Paket Juragan untuk menambah kamar.', kost_tier, allowed_max;
+    IF allowed_max IS NOT NULL AND current_count >= allowed_max THEN
+        RAISE EXCEPTION 'Batas kuota kamar terlampaui! Kos Anda menggunakan Paket % (Maksimal % kamar). Silakan upgrade ke Paket Juragan untuk menambah kamar tanpa batas.', kost_tier, allowed_max;
     END IF;
 
     RETURN NEW;

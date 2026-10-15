@@ -3,7 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:atur_kos/screens/auth/login_screen.dart';
 
 /// Halaman Pendaftaran Akun Atur Kos
-/// Mendukung pendaftaran Penghuni (Tenant) dengan Kode Undangan (Default: PRINCESS)
+/// Mendukung pendaftaran Penghuni (Tenant) dengan Kode Undangan
 /// dan pendaftaran Pemilik Kos Baru (Multi-Tenant Owner)
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -25,7 +25,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _passwordController = TextEditingController();
 
   // Controller Khusus Penghuni
-  final _kodeKostController = TextEditingController(text: 'PRINCESS');
+  final _kodeKostController = TextEditingController();
 
   // Controller Khusus Pemilik Kos Baru
   final _namaKostController = TextEditingController();
@@ -76,9 +76,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       };
 
       if (_selectedRole == 'tenant') {
-        // Jika Penghuni: sertakan kode undangan kos (default PRINCESS)
+        // Jika Penghuni: sertakan kode undangan kos
         final kode = _kodeKostController.text.trim().toUpperCase();
-        userMetadata['kode_kost'] = kode.isEmpty ? 'PRINCESS' : kode;
+        userMetadata['kode_kost'] = kode;
       } else {
         // Jika Pemilik Kos Baru: sertakan nama & alamat properti kosnya
         userMetadata['nama_kost'] = _namaKostController.text.trim();
@@ -170,7 +170,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     Text(
                       isOwner
                           ? 'Selamat! Akun pemilik untuk kos "${_namaKostController.text.trim()}" telah dibuat.\n\nLangkah Wajib Selanjutnya:\nSilakan masuk ke aplikasi dan langsung lengkapi foto KTP serta foto bangunan kos untuk pengajuan verifikasi ke Super Admin.'
-                          : 'Akun penghuni atas nama $nama telah terhubung ke kos pilihan Anda (Default: Kos Princess).\n\nStatus saat ini: "Menunggu Alokasi Kamar oleh Pemilik".',
+                          : 'Akun penghuni atas nama $nama berhasil terdaftar.\n\nStatus saat ini: "Menunggu Alokasi Kamar oleh Pemilik Kos".',
                       style: const TextStyle(height: 1.4, color: Color(0xFF475569)),
                     ),
                   ],
@@ -397,7 +397,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: const Text(
-                                'Default: PRINCESS',
+                                'Wajib Diisi',
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600,
@@ -409,7 +409,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                         const SizedBox(height: 6),
                         const Text(
-                          'Jika Anda penghuni Kos Princess, biarkan kode "PRINCESS". Jika menerima kode dari pemilik kos lain, masukkan kodenya di bawah:',
+                          'Masukkan kode undangan kos yang Anda dapatkan dari pemilik atau pengelola kos Anda:',
                           style: TextStyle(fontSize: 12, color: Color(0xFF475569), height: 1.4),
                         ),
                         const SizedBox(height: 10),
@@ -417,7 +417,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           controller: _kodeKostController,
                           textCapitalization: TextCapitalization.characters,
                           decoration: InputDecoration(
-                            hintText: 'PRINCESS',
+                            hintText: 'Contoh: KOSKU123',
                             filled: true,
                             fillColor: Colors.white,
                             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),

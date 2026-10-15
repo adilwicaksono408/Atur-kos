@@ -51,7 +51,7 @@ class _KosSettingsScreenState extends State<KosSettingsScreen> {
   late TextEditingController _fotoBangunanUrlController;
   late TextEditingController _dokumenKtpUrlController;
 
-  String _kodeKost = 'PRINCESS';
+  String _kodeKost = '-';
   String? _actualKostId;
   String _statusVerifikasi = 'pending_verification';
   String? _catatanVerifikasiAdmin;
@@ -74,7 +74,7 @@ class _KosSettingsScreenState extends State<KosSettingsScreen> {
     _namaKosController = TextEditingController(text: widget.currentKosName);
     _alamatController = TextEditingController();
     _kontakController = TextEditingController();
-    _kodeKostController = TextEditingController(text: 'PRINCESS');
+    _kodeKostController = TextEditingController();
 
     _bankController = TextEditingController(text: 'BCA');
     _rekeningController = TextEditingController();
@@ -131,10 +131,7 @@ class _KosSettingsScreenState extends State<KosSettingsScreen> {
       final dbNamaKos = data['nama_kost']?.toString();
       final shouldUseMetaName = (metaNamaKos != null &&
           metaNamaKos.isNotEmpty &&
-          (dbNamaKos == null ||
-              dbNamaKos.isEmpty ||
-              (dbNamaKos.toLowerCase() == 'kos princess' &&
-                  metaNamaKos.toLowerCase() != 'kos princess')));
+          (dbNamaKos == null || dbNamaKos.isEmpty));
 
       setState(() {
         _actualKostId = data['id']?.toString() ?? targetKostId;
@@ -150,7 +147,7 @@ class _KosSettingsScreenState extends State<KosSettingsScreen> {
         _bankController.text = data['rekening_bank']?.toString() ?? 'BCA';
         _rekeningController.text = data['nomor_rekening']?.toString() ?? '';
         _atasNamaController.text = data['nama_pemilik_rekening']?.toString() ?? '';
-        _kodeKost = data['kode_kost']?.toString() ?? 'PRINCESS';
+        _kodeKost = data['kode_kost']?.toString() ?? '-';
         _kodeKostController.text = _kodeKost;
 
         // Field v2.0.0
@@ -1014,7 +1011,7 @@ class _KosSettingsScreenState extends State<KosSettingsScreen> {
                                       ),
                                       child: Text(
                                         _tier == 'juragan'
-                                            ? '⭐ Paket Juragan (Maks $_maxRooms Kamar)'
+                                            ? '⭐ Paket Juragan (Kamar Tanpa Batas)'
                                             : 'Paket Starter (Maks $_maxRooms Kamar)',
                                         style: TextStyle(
                                           fontSize: 10,
@@ -1141,7 +1138,7 @@ class _KosSettingsScreenState extends State<KosSettingsScreen> {
                     const SizedBox(height: 6),
                     TextFormField(
                       controller: _namaKosController,
-                      decoration: _buildInputDecoration(hint: 'Contoh: Kos Princess', icon: Icons.apartment_rounded),
+                      decoration: _buildInputDecoration(hint: 'Contoh: Kos Mawar Indah', icon: Icons.apartment_rounded),
                       validator: (value) => value == null || value.trim().isEmpty ? 'Nama kos wajib diisi' : null,
                     ),
                     const SizedBox(height: 16),
