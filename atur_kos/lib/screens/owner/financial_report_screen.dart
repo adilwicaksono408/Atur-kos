@@ -1747,10 +1747,12 @@ class _FinancialReportScreenState extends State<FinancialReportScreen>
           .toList();
 
       final summary = CashLedgerSummary.fromLedgers(monthLedgers);
-      if (summary.totalPemasukan > overallMax)
+      if (summary.totalPemasukan > overallMax) {
         overallMax = summary.totalPemasukan;
-      if (summary.totalPengeluaran > overallMax)
+      }
+      if (summary.totalPengeluaran > overallMax) {
         overallMax = summary.totalPengeluaran;
+      }
 
       monthlyData.add({
         'label': _monthNames[mDate.month - 1].substring(0, 3),

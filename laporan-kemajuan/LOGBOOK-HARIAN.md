@@ -269,6 +269,48 @@ Setiap entri harian berisi **hasil nyata (deliverables)** yang selesai dikerjaka
   * File Diperbarui: [kos_service.dart](file:///d:/Atur%20kos/atur_kos/lib/services/kos_service.dart), [welcome_screen.dart](file:///d:/Atur%20kos/atur_kos/lib/screens/auth/welcome_screen.dart), [midtrans_tenant_payment_dialog.dart](file:///d:/Atur%20kos/atur_kos/lib/screens/payment/midtrans_tenant_payment_dialog.dart), [invoice_management_screen.dart](file:///d:/Atur%20kos/atur_kos/lib/screens/owner/invoice_management_screen.dart), [super_admin_dashboard_screen.dart](file:///d:/Atur%20kos/atur_kos/lib/screens/admin/super_admin_dashboard_screen.dart), [PROGRESS-PROJECT.md](file:///d:/Atur%20kos/laporan-kemajuan/PROGRESS-PROJECT.md), [LOGBOOK-HARIAN.md](file:///d:/Atur%20kos/laporan-kemajuan/LOGBOOK-HARIAN.md)
   * Validasi Linter: `flutter analyze` 100% exit code 0 (No issues found! pada seluruh project `atur_kos`).
 
+---
+
+## 📅 Minggu, 18 Oktober 2026 (Helpdesk Keluhan Kerusakan Fasilitas & Papan Pengumuman Digital / Paket Kurir - Modul 6 & 9)
+
+### 1. Kemajuan Project (Atur Kos)
+* **Ringkasan Status:**
+  * Modul 6 (Helpdesk Keluhan Kerusakan Fasilitas): **SELESAI (100%)**
+  * Modul 9 (Papan Pengumuman Digital & Notifikasi Paket Kurir): **SELESAI (100%)**
+  * Validasi Linter & Unit Test: **Stabil & Bersih** (`flutter analyze`: 0 issues found, `flutter test`: 10/10 passed).
+
+* **Rincian Capaian:**
+  * **A. Modul 6: Helpdesk Keluhan Kerusakan Fasilitas (US-5.1 & US-5.2):**
+    * **Sisi Penghuni ([tenant_dashboard_screen.dart](file:///d:/Atur%20kos/atur_kos/lib/screens/dashboard/tenant_dashboard_screen.dart)):**
+      * Form pelaporan kerusakan fasilitas (Kamar Pribadi vs Fasilitas Umum).
+      * Lampiran foto kerusakan dari kamera/galeri via `image_picker` dan upload ke Supabase Storage bucket `complaints`.
+      * Pelacakan status perbaikan transparan (*Diajukan* $\rightarrow$ *Diproses* $\rightarrow$ *Selesai*).
+    * **Sisi Pemilik ([complaint_management_screen.dart](file:///d:/Atur%20kos/atur_kos/lib/screens/owner/complaint_management_screen.dart)):**
+      * Galeri thumbnail foto kerusakan pada kartu keluhan dengan tombol perbesar / pratinjau *full-screen* interaktif via `InteractiveViewer`.
+      * Pembaruan status penanganan keluhan dan catatan perbaikan.
+    * **Database & Storage ([supabase_complaints_storage.sql](file:///d:/Atur%20kos/supabase_complaints_storage.sql)):**
+      * Konfigurasi storage bucket `complaints` dengan batas 5MB dan Row Level Security (RLS) terproteksi.
+  * **B. Modul 9: Papan Pengumuman Digital & Notifikasi Paket Kurir Tiba (US-6.3 & US-6.4):**
+    * **Model Data ([announcement_model.dart](file:///d:/Atur%20kos/atur_kos/lib/models/announcement_model.dart)):**
+      * 4 Kategori pengumuman: `paket`, `barang_hilang`, `info_operasional`, `umum`.
+      * Dukungan penargetan spesifik per kamar (`target_room_id`) atau broadcast ke seluruh kos.
+      * Unit test terverifikasi di [announcement_model_test.dart](file:///d:/Atur%20kos/atur_kos/test/announcement_model_test.dart).
+    * **Sisi Pemilik ([announcement_management_screen.dart](file:///d:/Atur%20kos/atur_kos/lib/screens/owner/announcement_management_screen.dart)):**
+      * Formulir pembuatan pengumuman dengan foto lampiran, opsi pin ke bagian teratas (*is_pinned*), dan tombol tandai paket sudah diambil (*is_resolved*).
+      * Tab filter status pengumuman (Semua, Aktif/Belum Diambil, Riwayat Selesai).
+    * **Sisi Penghuni ([tenant_dashboard_screen.dart](file:///d:/Atur%20kos/atur_kos/lib/screens/dashboard/tenant_dashboard_screen.dart)):**
+      * Feed pengumuman interaktif di dasbor penghuni dengan penandaan visual kategori dan tab riwayat paket kurir yang sudah diterima.
+    * **Dasbor Pemilik ([owner_dashboard_screen.dart](file:///d:/Atur%20kos/atur_kos/lib/screens/dashboard/owner_dashboard_screen.dart)):**
+      * Banner peringatan paket kurir yang menunggu diambil di resepsionis/lobi dengan tombol pintasan *"Lihat >"*.
+    * **Database & Storage ([supabase_announcements_storage_rls.sql](file:///d:/Atur%20kos/supabase_announcements_storage_rls.sql)):**
+      * DDL tabel `announcements`, ENUM `announcement_category`, indeks pencarian cepat, dan bucket storage `announcements`.
+
+* **Bukti/Artefak:**
+  * File Baru: `announcement_model.dart`, `announcement_management_screen.dart`, `announcement_model_test.dart`, `supabase_complaints_storage.sql`, `supabase_announcements_storage_rls.sql`
+  * File Diperbarui: `tenant_dashboard_screen.dart`, `owner_dashboard_screen.dart`, `complaint_management_screen.dart`, `kos_service.dart`, `financial_report_screen.dart`
+  * Status Kode: `flutter analyze` 0 issues found, `flutter test` 10/10 passed.
+
+
 
 
 

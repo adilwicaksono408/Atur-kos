@@ -16,10 +16,10 @@
 | **Modul 3: Manajemen Kamar & Kuota Freemium 2-Tier** | Selesai | 100% | 11 Oktober 2026 |
 | **Modul 4: Smart Billing, Midtrans Gateway & Kuitansi QR** | Selesai | 100% | 15 Oktober 2026 |
 | **Modul 5: WhatsApp Notification Engine (Anti-Ban)** | Menunggu | 0% | - |
-| **Modul 6: Helpdesk Kerusakan Fasilitas** | Menunggu | 0% | - |
-| **Modul 7: Mitigasi H-30 & Poster AI Marketing** | In Progress | 40% | 11 Oktober 2026 |
-| **Modul 8: Pembukuan Arus Kas (Cash Ledger)** | In Progress | 40% | 11 Oktober 2026 |
-| **Modul 9: Papan Pengumuman & Paket Kurir (FCM)** | Menunggu | 0% | - |
+| **Modul 6: Helpdesk Kerusakan Fasilitas** | Selesai | 100% | 18 Oktober 2026 |
+| **Modul 7: Mitigasi H-30 & Poster AI Marketing** | Selesai | 100% | 14 Oktober 2026 |
+| **Modul 8: Pembukuan Arus Kas (Cash Ledger & PDF)** | Selesai | 100% | 15 Oktober 2026 |
+| **Modul 9: Papan Pengumuman & Paket Kurir** | Selesai | 100% | 18 Oktober 2026 |
 
 ---
 
@@ -65,14 +65,15 @@
 - [x] Portal Audit Transaksi Midtrans & Langganan SaaS B2B untuk Super Admin (MRR, ARR, Konversi, Simulator Sandbox, Ekspor Bab IV)
 - [x] Simulasi alur webhook settlement Midtrans teruji end-to-end dengan integritas data Supabase riil
 
-### 5. Modul 5-9: Otomasi Lanjutan (Dalam Antrean Sprint)
+### 5. Modul 5-9: Otomasi Lanjutan
 - [ ] Modul 5: WhatsApp Reminder Berjenjang (Anti-Ban Jitter 5-10s)
-- [ ] Modul 6: Tiket Keluhan Kerusakan (Kamar Pribadi & Umum + Multi-Foto)
+- [x] Modul 6: Tiket Keluhan Kerusakan (Kamar Pribadi & Umum + Multi-Foto)
 - [x] Modul 7: Generator Poster Kamar Kosong AI (1:1 Feed & 9:16 Story)
 - [x] Modul 7: Backend Supabase Edge Function AI Image-to-Image (`generate-room-variation`)
 - [x] Modul 7: Skema Database Kuota AI Bulanan & Bucket Storage (`supabase_ai_poster_quota.sql`)
 - [x] Modul 7: Deteksi Sisa Sewa 30 Hari (Radar Mitigasi H-30)
 - [x] Modul 7: AI Natural Touch-up & Real-Lighting (100% foto asli kamar tanpa manipulasi fiktif/dilebih-lebihkan)
-- [ ] Modul 8: Ekspor Rekap Buku Kas (Excel / PDF)
-- [ ] Modul 9: Pengumuman Paket Kurir Tiba Terarah via FCM
+- [x] Modul 8: Pembukuan Arus Kas Masuk/Keluar (Cash Ledger) & Ekspor PDF
+- [x] Modul 9: Papan Pengumuman Digital & Notifikasi Paket Kurir Tiba (Terarah per Kamar)
+
 

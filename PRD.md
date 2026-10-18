@@ -249,7 +249,7 @@ Scenario: Pengiriman reminder otomatis dibatalkan jika bukti sudah diunggah
    * `sedang_dikerjakan`: Pemilik telah menugaskan teknisi/dalam proses perbaikan.
    * `selesai`: Fasilitas telah diperbaiki dan diverifikasi oleh pemilik.
 3. **Lampiran Foto:**
-   * Wajib melampirkan minimal 1 foto bukti kerusakan (maksimal 3 foto, @5MB).
+   * Melampirkan foto bukti kerusakan bersifat **opsional** (penghuni dapat mengambil foto langsung via Kamera, memilih dari Galeri, atau melewati tanpa melampirkan foto). Kompresi otomatis $< 500$ KB.
 
 #### Kriteria Penerimaan (Acceptance Criteria)
 ```gherkin

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:atur_kos/models/kost_model.dart';
+import 'package:atur_kos/models/announcement_model.dart';
 
 /// Model Data Ringkasan Operasional Properti (KPI Operasional Kos)
 class OperationalSummary {
@@ -14,6 +15,7 @@ class OperationalSummary {
   final int overdueCount;
   final int pendingVerificationCount;
   final int activeComplaintsCount;
+  final int activePackagesCount;
 
   const OperationalSummary({
     this.totalRooms = 0,
@@ -26,6 +28,7 @@ class OperationalSummary {
     this.overdueCount = 0,
     this.pendingVerificationCount = 0,
     this.activeComplaintsCount = 0,
+    this.activePackagesCount = 0,
   });
 }
 
@@ -456,6 +459,20 @@ class KosService {
         activeComplaintsCount = 0;
       }
 
+      // 4. Data Paket Kurir Tiba yang Belum Diambil (Modul 9)
+      int activePackagesCount = 0;
+      try {
+        final packagesData = await _client
+            .from('announcements')
+            .select('id')
+            .eq('kost_id', resolvedKostId)
+            .eq('kategori', 'paket')
+            .eq('is_resolved', false);
+        activePackagesCount = (packagesData as List).length;
+      } catch (_) {
+        activePackagesCount = 0;
+      }
+
       return OperationalSummary(
         totalRooms: totalRooms,
         occupiedRooms: occupiedRooms,
@@ -467,6 +484,7 @@ class KosService {
         overdueCount: overdueCount,
         pendingVerificationCount: pendingVerificationCount,
         activeComplaintsCount: activeComplaintsCount,
+        activePackagesCount: activePackagesCount,
       );
     } catch (e) {
       return const OperationalSummary();
@@ -1609,6 +1627,219 @@ class KosService {
     } catch (e) {
       debugPrint('Error getAiGenerationHistory: $e');
       return [];
+    }
+  }
+
+  // ===========================================================================
+  // 12. PAPAN PENGUMUMAN DIGITAL & NOTIFIKASI PAKET KURIR (PRD MODUL 9)
+  // ===========================================================================
+
+  /// Mengambil daftar pengumuman untuk kos tertentu
+  /// Mendukung filter kategori, status selesai (is_resolved), dan target kamar
+  static Future<List<AnnouncementModel>> getAnnouncements({
+    required String kostId,
+    String? targetRoomId,
+    String? categoryFilter, // 'paket', 'barang_hilang', 'info_operasional', 'umum'
+    bool? isResolved,
+    int limit = 50,
+  }) async {
+    try {
+      var query = _client.from('announcements').select('''
+        id,
+        kost_id,
+        author_id,
+        target_room_id,
+        kategori,
+        judul,
+        deskripsi,
+        foto_urls,
+        is_pinned,
+        is_resolved,
+        created_at,
+        updated_at,
+        rooms:target_room_id (
+          nomor_kamar,
+          tipe
+        ),
+        profiles:author_id (
+          full_name,
+          role
+        )
+      ''').eq('kost_id', kostId);
+
+      if (categoryFilter != null && categoryFilter.isNotEmpty && categoryFilter != 'semua') {
+        query = query.eq('kategori', categoryFilter);
+      }
+
+      if (isResolved != null) {
+        query = query.eq('is_resolved', isResolved);
+      }
+
+      if (targetRoomId != null && targetRoomId.isNotEmpty) {
+        query = query.or('target_room_id.is.null,target_room_id.eq.$targetRoomId');
+      }
+
+      final data = await query
+          .order('is_pinned', ascending: false)
+          .order('created_at', ascending: false)
+          .limit(limit);
+
+      return (data as List)
+          .map((item) => AnnouncementModel.fromMap(Map<String, dynamic>.from(item)))
+          .toList();
+    } catch (e) {
+      debugPrint('Error getAnnouncements: $e');
+      return [];
+    }
+  }
+
+  /// Membuat pengumuman baru atau mencatat paket kurir tiba
+  static Future<AnnouncementModel?> createAnnouncement({
+    required String kostId,
+    required String authorId,
+    String? targetRoomId,
+    required String kategori,
+    required String judul,
+    required String deskripsi,
+    List<String> fotoUrls = const [],
+    bool isPinned = false,
+  }) async {
+    try {
+      final payload = {
+        'kost_id': kostId,
+        'author_id': authorId,
+        'target_room_id': (targetRoomId != null && targetRoomId.isNotEmpty) ? targetRoomId : null,
+        'kategori': kategori,
+        'judul': judul,
+        'deskripsi': deskripsi,
+        'foto_urls': fotoUrls,
+        'is_pinned': isPinned,
+        'is_resolved': false,
+      };
+
+      final res = await _client.from('announcements').insert(payload).select('''
+        id,
+        kost_id,
+        author_id,
+        target_room_id,
+        kategori,
+        judul,
+        deskripsi,
+        foto_urls,
+        is_pinned,
+        is_resolved,
+        created_at,
+        updated_at,
+        rooms:target_room_id (
+          nomor_kamar,
+          tipe
+        ),
+        profiles:author_id (
+          full_name,
+          role
+        )
+      ''').single();
+
+      return AnnouncementModel.fromMap(Map<String, dynamic>.from(res));
+    } catch (e) {
+      debugPrint('Error createAnnouncement: $e');
+      return null;
+    }
+  }
+
+  /// Unggah foto paket kurir atau barang hilang ke Storage Bucket 'announcements'
+  static Future<String?> uploadAnnouncementPhoto({
+    required Uint8List bytes,
+    String extension = 'jpg',
+    String? kostId,
+  }) async {
+    try {
+      final ext = extension.replaceAll('.', '').toLowerCase();
+      final mimeType = ext == 'png' ? 'image/png' : 'image/jpeg';
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = 'announcement_${kostId ?? "general"}_$timestamp.$ext';
+      final filePath = 'photos/$fileName';
+
+      await _client.storage.from('announcements').uploadBinary(
+        filePath,
+        bytes,
+        fileOptions: FileOptions(contentType: mimeType, upsert: true),
+      );
+
+      final publicUrl = _client.storage.from('announcements').getPublicUrl(filePath);
+      return publicUrl;
+    } catch (e) {
+      debugPrint('Error uploadAnnouncementPhoto: $e');
+      return null;
+    }
+  }
+
+  /// Memperbarui status penyelesaian (is_resolved = true saat paket diambil)
+  static Future<bool> updateAnnouncementResolvedStatus({
+    required String announcementId,
+    required bool isResolved,
+  }) async {
+    try {
+      await _client.from('announcements').update({
+        'is_resolved': isResolved,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', announcementId);
+      return true;
+    } catch (e) {
+      debugPrint('Error updateAnnouncementResolvedStatus: $e');
+      return false;
+    }
+  }
+
+  /// Mengubah status sematan (Pin) pengumuman
+  static Future<bool> togglePinAnnouncement({
+    required String announcementId,
+    required bool isPinned,
+  }) async {
+    try {
+      await _client.from('announcements').update({
+        'is_pinned': isPinned,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', announcementId);
+      return true;
+    } catch (e) {
+      debugPrint('Error togglePinAnnouncement: $e');
+      return false;
+    }
+  }
+
+  /// Menghapus pengumuman
+  static Future<bool> deleteAnnouncement(String announcementId) async {
+    try {
+      await _client.from('announcements').delete().eq('id', announcementId);
+      return true;
+    } catch (e) {
+      debugPrint('Error deleteAnnouncement: $e');
+      return false;
+    }
+  }
+
+  /// Menghitung total paket yang belum diambil untuk kamar tertentu atau seluruh kos
+  static Future<int> getUnresolvedPackagesCount({
+    required String kostId,
+    String? targetRoomId,
+  }) async {
+    try {
+      var query = _client
+          .from('announcements')
+          .select('id')
+          .eq('kost_id', kostId)
+          .eq('kategori', 'paket')
+          .eq('is_resolved', false);
+
+      if (targetRoomId != null && targetRoomId.isNotEmpty) {
+        query = query.eq('target_room_id', targetRoomId);
+      }
+
+      final res = await query;
+      return (res as List).length;
+    } catch (e) {
+      return 0;
     }
   }
 }

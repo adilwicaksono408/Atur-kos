@@ -260,7 +260,7 @@ sequenceDiagram
   * `kamar_pribadi` : Hanya terlihat oleh pelapor dan pemilik kos.
   * `fasilitas_umum` : Terlihat oleh seluruh penghuni satu kos (contoh: pompa air mati, lampu lorong putus, kompor umum rusak) untuk mencegah laporan duplikat.
 * **Spesifikasi Formulir:**
-  * Wajib melampirkan minimal 1 foto bukti kerusakan (maksimal 3 foto, kompresi klien $< 500$ KB).
+  * Melampirkan foto bukti kerusakan bersifat **opsional** (penghuni dapat mengambil foto langsung via Kamera, memilih dari Galeri, atau melewati tanpa melampirkan foto untuk situasi darurat). Kompresi otomatis $< 500$ KB.
 * **Pelacakan Status:**
   * `diajukan` $\rightarrow$ `sedang_dikerjakan` (disertai jadwal teknisi/tukang) $\rightarrow$ `selesai`.
 

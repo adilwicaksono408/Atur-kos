@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:atur_kos/services/kos_service.dart';
 import 'package:atur_kos/utils/format_utils.dart';
@@ -464,7 +465,12 @@ class _ComplaintManagementScreenState extends State<ComplaintManagementScreen>
                 height: 1.4,
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
+
+            // Foto Lampiran Kerusakan (Opsional)
+            ..._buildCardPhotoSection(item),
+
+            const SizedBox(height: 12),
 
             // Catatan Penanganan Teknisi (jika ada)
             if (notes != null && notes.trim().isNotEmpty) ...[
@@ -551,4 +557,165 @@ class _ComplaintManagementScreenState extends State<ComplaintManagementScreen>
       ),
     );
   }
+
+  List<Widget> _buildCardPhotoSection(Map<String, dynamic> item) {
+    final rawPhotos = item['foto_urls'];
+    List<String> fotoUrls = [];
+    if (rawPhotos is List) {
+      fotoUrls = rawPhotos.map((e) => e.toString()).where((e) => e.trim().isNotEmpty).toList();
+    }
+
+    if (fotoUrls.isEmpty) {
+      return [
+        Row(
+          children: const [
+            Icon(Icons.image_not_supported_outlined, size: 14, color: Color(0xFF94A3B8)),
+            SizedBox(width: 6),
+            Text(
+              'Tidak ada foto bukti yang dilampirkan (opsional)',
+              style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8), fontStyle: FontStyle.italic),
+            ),
+          ],
+        ),
+      ];
+    }
+
+    return [
+      Row(
+        children: [
+          const Icon(Icons.photo_library_outlined, size: 14, color: Color(0xFF64748B)),
+          const SizedBox(width: 6),
+          Text(
+            'Foto Bukti Kerusakan (${fotoUrls.length}):',
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF64748B),
+            ),
+          ),
+          const SizedBox(width: 6),
+          const Text(
+            '• Ketuk untuk perbesar',
+            style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8), fontStyle: FontStyle.italic),
+          ),
+        ],
+      ),
+      const SizedBox(height: 8),
+      SizedBox(
+        height: 85,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: fotoUrls.length,
+          separatorBuilder: (_, index) => const SizedBox(width: 8),
+          itemBuilder: (ctx, idx) {
+            final photoUrl = fotoUrls[idx];
+            return GestureDetector(
+              onTap: () => _showFullScreenImage(context, photoUrl),
+              child: Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      width: 85,
+                      height: 85,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: _buildComplaintImage(photoUrl, fit: BoxFit.cover),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 4,
+                    right: 4,
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Icon(
+                        Icons.zoom_in_rounded,
+                        color: Colors.white,
+                        size: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    ];
+  }
+
+  Widget _buildComplaintImage(String url, {double? width, double? height, BoxFit fit = BoxFit.cover}) {
+    if (url.startsWith('data:image')) {
+      try {
+        final base64String = url.split(',').last;
+        final bytes = base64Decode(base64String);
+        return Image.memory(bytes, width: width, height: height, fit: fit);
+      } catch (_) {
+        return Container(
+          width: width,
+          height: height,
+          color: const Color(0xFFF1F5F9),
+          child: const Icon(Icons.broken_image_rounded, color: Color(0xFF94A3B8)),
+        );
+      }
+    }
+    return Image.network(
+      url,
+      width: width,
+      height: height,
+      fit: fit,
+      errorBuilder: (context, error, stackTrace) => Container(
+        width: width,
+        height: height,
+        color: const Color(0xFFF1F5F9),
+        child: const Icon(Icons.broken_image_rounded, color: Color(0xFF94A3B8)),
+      ),
+    );
+  }
+
+  void _showFullScreenImage(BuildContext context, String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Stack(
+          alignment: Alignment.topRight,
+          children: [
+            InteractiveViewer(
+              panEnabled: true,
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  constraints: const BoxConstraints(maxHeight: 520, maxWidth: 650),
+                  color: Colors.black,
+                  child: _buildComplaintImage(imageUrl, fit: BoxFit.contain),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 10,
+              right: 10,
+              child: CircleAvatar(
+                backgroundColor: Colors.black54,
+                child: IconButton(
+                  icon: const Icon(Icons.close_rounded, color: Colors.white),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
+

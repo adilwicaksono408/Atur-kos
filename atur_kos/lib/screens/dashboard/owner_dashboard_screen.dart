@@ -12,6 +12,7 @@ import 'package:atur_kos/screens/owner/tenant_allocation_screen.dart';
 import 'package:atur_kos/screens/owner/complaint_management_screen.dart';
 import 'package:atur_kos/screens/owner/room_poster_generator_screen.dart';
 import 'package:atur_kos/screens/owner/financial_report_screen.dart';
+import 'package:atur_kos/screens/owner/announcement_management_screen.dart';
 import 'package:atur_kos/screens/payment/midtrans_snap_payment_dialog.dart';
 import 'package:atur_kos/utils/format_utils.dart';
 
@@ -1553,6 +1554,64 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildActionTile(
+                        icon: Icons.inventory_2_rounded,
+                        color: const Color(0xFF2563EB),
+                        title: 'Pengumuman & Paket',
+                        subtitle: isJuragan
+                            ? (_summary.activePackagesCount > 0
+                                ? '${_summary.activePackagesCount} paket tiba'
+                                : 'Papan Pengumuman')
+                            : '⭐ Fitur Paket Juragan',
+                        isLocked: !isVerified,
+                        isPremium: true,
+                        isJuragan: isJuragan,
+                        onTap: () {
+                          if (!isVerified) {
+                            _guardedFeatureAction('Papan Pengumuman & Paket Kurir', () {});
+                          } else if (!isJuragan) {
+                            _showPremiumUpgradeDialog(featureName: 'Papan Pengumuman & Paket Kurir');
+                          } else {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => AnnouncementManagementScreen(
+                                  kostId: resolvedKostId,
+                                  kosName: kosName,
+                                ),
+                              ),
+                            ).then((_) => _fetchDashboardData());
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildActionTile(
+                        icon: Icons.tune_rounded,
+                        color: const Color(0xFF475569),
+                        title: 'Pengaturan Kos',
+                        subtitle: 'Alamat, Maps & Bank',
+                        isLocked: false,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => KosSettingsScreen(
+                                kostId: resolvedKostId,
+                                currentKosName: kosName,
+                              ),
+                            ),
+                          ).then((_) => _fetchDashboardData());
+                        },
+                      ),
+                    ),
+                  ],
+                ),
 
                 const SizedBox(height: 32),
 
@@ -1805,6 +1864,79 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                     ],
                   ),
                 ),
+
+                if (isJuragan && _summary.activePackagesCount > 0) ...[
+                  const SizedBox(height: 14),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFFBFDBFE)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDBEAFE),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: const Icon(
+                            Icons.mark_email_unread_rounded,
+                            color: Color(0xFF2563EB),
+                            size: 26,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${_summary.activePackagesCount} Paket Kurir Menunggu Diambil',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF1E3A8A),
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              const Text(
+                                'Ada paket kurir yang menunggu diambil oleh penghuni di area resepsionis/lobi.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF3B82F6),
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => AnnouncementManagementScreen(
+                                  kostId: resolvedKostId,
+                                  kosName: kosName,
+                                ),
+                              ),
+                            ).then((_) => _fetchDashboardData());
+                          },
+                          style: TextButton.styleFrom(
+                            foregroundColor: const Color(0xFF2563EB),
+                            textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                          ),
+                          child: const Text('Lihat >'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

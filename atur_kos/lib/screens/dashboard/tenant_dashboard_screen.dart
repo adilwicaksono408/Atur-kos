@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:atur_kos/models/user_profile.dart';
+import 'package:atur_kos/models/announcement_model.dart';
 import 'package:atur_kos/screens/payment/midtrans_tenant_payment_dialog.dart';
 import 'package:atur_kos/services/auth_service.dart';
 import 'package:atur_kos/services/kos_service.dart';
@@ -32,6 +33,9 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
   Map<String, dynamic>? _linkedKosData;
   Map<String, dynamic>? _activeInvoice;
   List<Map<String, dynamic>> _complaints = [];
+  List<AnnouncementModel> _activePackages = [];
+  List<AnnouncementModel> _activeAnnouncements = [];
+  List<AnnouncementModel> _resolvedPackages = [];
   bool _isLoading = true;
   bool _isProofUploaded = false;
   bool _isJoiningKos = false;
@@ -58,6 +62,9 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
     List<Map<String, dynamic>> complaints = [];
     Map<String, dynamic>? linkedKos;
     Map<String, dynamic>? activeInvoice;
+    List<AnnouncementModel> activePackages = [];
+    List<AnnouncementModel> activeAnnouncements = [];
+    List<AnnouncementModel> resolvedPackages = [];
 
     // Refresh data profil terbaru untuk identitas KTP & kontak darurat
     UserProfile? freshProfile;
@@ -94,6 +101,22 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
       } else if (kostId != null && kostId.isNotEmpty) {
         linkedKos = await KosService.getKosProfile(kostId);
       }
+
+      // Modul 9: Ambil Notifikasi Paket Kurir Tiba & Papan Pengumuman Digital
+      if (kostId != null && kostId.isNotEmpty) {
+        try {
+          final roomId = room?['id']?.toString() ?? assignment['room_id']?.toString();
+          final allAnnouncements = await KosService.getAnnouncements(
+            kostId: kostId,
+            targetRoomId: roomId,
+          );
+          activePackages = allAnnouncements.where((a) => a.isPaket && !a.isResolved).toList();
+          activeAnnouncements = allAnnouncements.where((a) => !a.isPaket && !a.isResolved).toList();
+          resolvedPackages = allAnnouncements.where((a) => a.isPaket && a.isResolved).toList();
+        } catch (e) {
+          debugPrint('Error fetch tenant announcements: $e');
+        }
+      }
     } else {
       // Jika belum dialokasikan kamar, cek apakah profil sudah terhubung ke suatu kos
       try {
@@ -118,6 +141,9 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
         _linkedKosData = linkedKos;
         _activeInvoice = activeInvoice;
         _complaints = complaints;
+        _activePackages = activePackages;
+        _activeAnnouncements = activeAnnouncements;
+        _resolvedPackages = resolvedPackages;
         _isProofUploaded = activeInvoice?['status'] == 'menunggu_verifikasi';
         _isLoading = false;
       });
@@ -301,7 +327,11 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
     String scope = 'kamar_pribadi';
     String category = 'Kran Air / Saluran Bocor';
     final descController = TextEditingController();
-    final photoController = TextEditingController();
+    
+    // State foto lampiran (opsional: kamera, galeri, atau lewati tanpa foto)
+    Uint8List? selectedPhotoBytes;
+    String? uploadedPhotoUrl;
+    bool isUploadingPhoto = false;
 
     final categories = [
       'Kran Air / Saluran Bocor',
@@ -394,43 +424,263 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                 ),
-                const SizedBox(height: 14),
-                const Text(
-                  'Tautan / Catatan Foto Bukti (Opsional):',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                const SizedBox(height: 16),
+                
+                // Header Lampiran Foto (Opsional)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Foto Bukti Kerusakan:',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: const Text(
+                        'Opsional / Boleh Dilewati',
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
-                TextField(
-                  controller: photoController,
-                  decoration: InputDecoration(
-                    hintText: 'Masukkan link Google Drive / foto jika ada',
-                    hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+
+                if (isUploadingPhoto)
+                  Container(
+                    height: 110,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0D9488)),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            'Mengompres & memproses foto...',
+                            style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else if (selectedPhotoBytes != null || uploadedPhotoUrl != null)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Stack(
+                        children: [
+                          Container(
+                            height: 130,
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFF0D9488)),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: selectedPhotoBytes != null
+                                  ? Image.memory(selectedPhotoBytes!, fit: BoxFit.cover)
+                                  : _buildComplaintImage(uploadedPhotoUrl!, fit: BoxFit.cover),
+                            ),
+                          ),
+                          Positioned(
+                            top: 6,
+                            right: 6,
+                            child: InkWell(
+                              onTap: () {
+                                setDialogState(() {
+                                  selectedPhotoBytes = null;
+                                  uploadedPhotoUrl = null;
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: const BoxDecoration(
+                                  color: Colors.black54,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.close_rounded, color: Colors.white, size: 16),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 6,
+                            left: 6,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.65),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 12),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'Foto terlampir',
+                                    style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Text('Ganti foto:', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                          const SizedBox(width: 8),
+                          InkWell(
+                            onTap: () => _pickComplaintPhoto(
+                              ImageSource.camera,
+                              (bytes, url) => setDialogState(() {
+                                selectedPhotoBytes = bytes;
+                                uploadedPhotoUrl = url;
+                              }),
+                              (loading) => setDialogState(() => isUploadingPhoto = loading),
+                            ),
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                              child: Text('Kamera', style: TextStyle(fontSize: 11, color: Color(0xFF0D9488), fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                          const Text('•', style: TextStyle(color: Color(0xFF94A3B8))),
+                          InkWell(
+                            onTap: () => _pickComplaintPhoto(
+                              ImageSource.gallery,
+                              (bytes, url) => setDialogState(() {
+                                selectedPhotoBytes = bytes;
+                                uploadedPhotoUrl = url;
+                              }),
+                              (loading) => setDialogState(() => isUploadingPhoto = loading),
+                            ),
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                              child: Text('Galeri', style: TextStyle(fontSize: 11, color: Color(0xFF0D9488), fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Pilih sumber foto bukti kerusakan (jika ada):',
+                          style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () => _pickComplaintPhoto(
+                                  ImageSource.camera,
+                                  (bytes, url) => setDialogState(() {
+                                    selectedPhotoBytes = bytes;
+                                    uploadedPhotoUrl = url;
+                                  }),
+                                  (loading) => setDialogState(() => isUploadingPhoto = loading),
+                                ),
+                                icon: const Icon(Icons.camera_alt_rounded, size: 16),
+                                label: const Text('Kamera', style: TextStyle(fontSize: 12)),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF0F172A),
+                                  side: const BorderSide(color: Color(0xFFCBD5E1)),
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () => _pickComplaintPhoto(
+                                  ImageSource.gallery,
+                                  (bytes, url) => setDialogState(() {
+                                    selectedPhotoBytes = bytes;
+                                    uploadedPhotoUrl = url;
+                                  }),
+                                  (loading) => setDialogState(() => isUploadingPhoto = loading),
+                                ),
+                                icon: const Icon(Icons.photo_library_rounded, size: 16),
+                                label: const Text('Galeri', style: TextStyle(fontSize: 12)),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF0F172A),
+                                  side: const BorderSide(color: Color(0xFFCBD5E1)),
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        const Row(
+                          children: [
+                            Icon(Icons.check_circle_outline_rounded, size: 12, color: Color(0xFF0D9488)),
+                            SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                'Boleh dilewati tanpa foto jika kondisi darurat / tidak memungkinkan.',
+                                style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontStyle: FontStyle.italic),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
               ],
             ),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
+              onPressed: isUploadingPhoto ? null : () => Navigator.pop(ctx, false),
               child: const Text('Batal'),
             ),
             ElevatedButton(
-              onPressed: () {
-                if (descController.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Harap isi deskripsi kerusakan.')),
-                  );
-                  return;
-                }
-                Navigator.pop(ctx, true);
-              },
+              onPressed: isUploadingPhoto
+                  ? null
+                  : () {
+                      if (descController.text.trim().isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Harap isi deskripsi kerusakan.')),
+                        );
+                        return;
+                      }
+                      Navigator.pop(ctx, true);
+                    },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF0D9488),
                 foregroundColor: Colors.white,
               ),
-              child: const Text('Kirim Laporan'),
+              child: Text(isUploadingPhoto ? 'Mengunggah...' : 'Kirim Laporan'),
             ),
           ],
         ),
@@ -440,7 +690,9 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
     if (result == true) {
       final kostId = _assignmentData!['kost_id'].toString();
       final tenantId = _assignmentData!['id'].toString();
-      final photoUrl = photoController.text.trim();
+      final photoUrls = uploadedPhotoUrl != null && uploadedPhotoUrl!.trim().isNotEmpty
+          ? [uploadedPhotoUrl!.trim()]
+          : <String>[];
 
       final success = await KosService.createComplaint(
         kostId: kostId,
@@ -448,7 +700,7 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
         tipeFasilitas: scope,
         judul: category,
         deskripsi: descController.text.trim(),
-        fotoUrls: photoUrl.isNotEmpty ? [photoUrl] : [],
+        fotoUrls: photoUrls,
       );
 
       if (mounted) {
@@ -592,6 +844,8 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
                             Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                             const SizedBox(height: 4),
                             Text(desc, style: const TextStyle(fontSize: 12, color: Color(0xFF475569))),
+                            const SizedBox(height: 8),
+                            ..._buildTenantCardPhotoSection(c),
                             if (notes != null && notes.isNotEmpty) ...[
                               const SizedBox(height: 8),
                               Container(
@@ -623,6 +877,206 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
                 ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// Memilih foto keluhan kerusakan melalui kamera atau galeri dengan kompresi & fallback
+  Future<void> _pickComplaintPhoto(
+    ImageSource source,
+    void Function(Uint8List bytes, String url) onPhotoPicked,
+    void Function(bool loading) setLoading,
+  ) async {
+    try {
+      setLoading(true);
+      final picked = await _picker.pickImage(
+        source: source,
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 80,
+      );
+      if (picked == null) {
+        setLoading(false);
+        return;
+      }
+
+      final bytes = await picked.readAsBytes();
+      final ext = picked.name.split('.').last.toLowerCase();
+      final mimeType = ext == 'png' ? 'image/png' : 'image/jpeg';
+      String finalUrl = 'data:$mimeType;base64,${base64Encode(bytes)}';
+
+      try {
+        final fileName = 'complaint_${_currentProfile.id}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+        final path = 'complaints/$fileName';
+        await Supabase.instance.client.storage
+            .from('verification-docs')
+            .uploadBinary(
+              path,
+              bytes,
+              fileOptions: FileOptions(contentType: mimeType, upsert: true),
+            );
+        final publicUrl = Supabase.instance.client.storage
+            .from('verification-docs')
+            .getPublicUrl(path);
+        finalUrl = publicUrl;
+      } catch (storageError) {
+        debugPrint('Storage upload fallback to base64: $storageError');
+      }
+
+      onPhotoPicked(bytes, finalUrl);
+      setLoading(false);
+    } catch (e) {
+      setLoading(false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memilih foto: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Menampilkan thumbnail foto lampiran keluhan pada kartu riwayat penghuni
+  List<Widget> _buildTenantCardPhotoSection(Map<String, dynamic> item) {
+    final rawPhotos = item['foto_urls'];
+    List<String> fotoUrls = [];
+    if (rawPhotos is List) {
+      fotoUrls = rawPhotos.map((e) => e.toString()).where((e) => e.trim().isNotEmpty).toList();
+    }
+
+    if (fotoUrls.isEmpty) {
+      return [
+        Row(
+          children: const [
+            Icon(Icons.image_not_supported_outlined, size: 12, color: Color(0xFF94A3B8)),
+            SizedBox(width: 4),
+            Text(
+              'Tanpa foto lampiran',
+              style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8), fontStyle: FontStyle.italic),
+            ),
+          ],
+        ),
+      ];
+    }
+
+    return [
+      SizedBox(
+        height: 70,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: fotoUrls.length,
+          separatorBuilder: (_, index) => const SizedBox(width: 8),
+          itemBuilder: (ctx, idx) {
+            final photoUrl = fotoUrls[idx];
+            return GestureDetector(
+              onTap: () => _showFullScreenImage(context, photoUrl),
+              child: Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      width: 70,
+                      height: 70,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: _buildComplaintImage(photoUrl, fit: BoxFit.cover),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 2,
+                    right: 2,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Icon(
+                        Icons.zoom_in_rounded,
+                        color: Colors.white,
+                        size: 11,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    ];
+  }
+
+  /// Helper untuk merender gambar keluhan baik Base64 maupun URL Supabase
+  Widget _buildComplaintImage(String url, {double? width, double? height, BoxFit fit = BoxFit.cover}) {
+    if (url.startsWith('data:image')) {
+      try {
+        final base64String = url.split(',').last;
+        final bytes = base64Decode(base64String);
+        return Image.memory(bytes, width: width, height: height, fit: fit);
+      } catch (_) {
+        return Container(
+          width: width,
+          height: height,
+          color: const Color(0xFFF1F5F9),
+          child: const Icon(Icons.broken_image_rounded, color: Color(0xFF94A3B8)),
+        );
+      }
+    }
+    return Image.network(
+      url,
+      width: width,
+      height: height,
+      fit: fit,
+      errorBuilder: (context, error, stackTrace) => Container(
+        width: width,
+        height: height,
+        color: const Color(0xFFF1F5F9),
+        child: const Icon(Icons.broken_image_rounded, color: Color(0xFF94A3B8)),
+      ),
+    );
+  }
+
+  /// Menampilkan dialog foto keluhan beresolusi penuh dengan zoom interaktif
+  void _showFullScreenImage(BuildContext context, String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Stack(
+          alignment: Alignment.topRight,
+          children: [
+            InteractiveViewer(
+              panEnabled: true,
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  constraints: const BoxConstraints(maxHeight: 520, maxWidth: 650),
+                  color: Colors.black,
+                  child: _buildComplaintImage(imageUrl, fit: BoxFit.contain),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 10,
+              right: 10,
+              child: CircleAvatar(
+                backgroundColor: Colors.black54,
+                child: IconButton(
+                  icon: const Icon(Icons.close_rounded, color: Colors.white),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1196,6 +1650,24 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // ---------------------------------------------------------------------
+        // 1. BANNER NOTIFIKASI PAKET KURIR TIBA (PRD MODUL 9)
+        // ---------------------------------------------------------------------
+        if (_activePackages.isNotEmpty) ...[
+          ..._activePackages.map((pkg) => _buildPackageArrivalBanner(pkg, roomNumber)),
+          const SizedBox(height: 18),
+        ],
+
+        // ---------------------------------------------------------------------
+        // 2. BANNER PENGUMUMAN DARURAT TERSEMAT (PINNED)
+        // ---------------------------------------------------------------------
+        if (_activeAnnouncements.any((a) => a.isPinned)) ...[
+          ..._activeAnnouncements
+              .where((a) => a.isPinned)
+              .map((info) => _buildEmergencyAnnouncementBanner(info)),
+          const SizedBox(height: 18),
+        ],
+
         // Kartu Identitas Kamar Penghuni
         Container(
           width: double.infinity,
@@ -1725,6 +2197,41 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
             ),
           ],
         ),
+
+        const SizedBox(height: 12),
+
+        // Baris Layanan Modul 9: Papan Pengumuman & Riwayat Paket
+        Row(
+          children: [
+            Expanded(
+              child: _buildServiceTile(
+                icon: Icons.campaign_rounded,
+                color: const Color(0xFF2563EB),
+                title: 'Pengumuman Kos',
+                subtitle: _activeAnnouncements.isNotEmpty
+                    ? '${_activeAnnouncements.length} info aktif'
+                    : 'Papan Informasi',
+                onTap: () => _showAnnouncementsBoardDialog(initialTab: 0),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildServiceTile(
+                icon: Icons.inventory_2_rounded,
+                color: const Color(0xFF0D9488),
+                title: 'Riwayat Paket',
+                subtitle: '${_resolvedPackages.length} paket diterima',
+                onTap: () => _showAnnouncementsBoardDialog(initialTab: 1),
+              ),
+            ),
+          ],
+        ),
+
+        // Pratinjau Papan Pengumuman Kos Terkini jika ada info aktif
+        if (_activeAnnouncements.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          _buildAnnouncementsPreviewSection(),
+        ],
       ],
     );
   }
@@ -1777,6 +2284,667 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // MODUL 9: PAPAN PENGUMUMAN DIGITAL & NOTIFIKASI PAKET KURIR TIBA
+  // ===========================================================================
+
+  /// Menandai paket kurir telah diambil oleh penghuni kamar
+  Future<void> _markPackageAsReceived(AnnouncementModel pkg) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.check_circle_rounded, color: Color(0xFF059669), size: 24),
+            SizedBox(width: 10),
+            Text('Sudah Ambil Paket?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: const Text(
+          'Konfirmasi bahwa paket kurir ini sudah Anda ambil dari lobi/meja resepsionis. Kartu notifikasi akan dipindahkan ke riwayat arsip Anda.',
+          style: TextStyle(fontSize: 13, color: Color(0xFF475569), height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF059669),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              elevation: 0,
+            ),
+            child: const Text('Ya, Sudah Diambil'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final success = await KosService.updateAnnouncementResolvedStatus(
+        announcementId: pkg.id,
+        isResolved: true,
+      );
+
+      if (success && mounted) {
+        setState(() {
+          _activePackages.removeWhere((p) => p.id == pkg.id);
+          _resolvedPackages.insert(0, pkg.copyWith(isResolved: true));
+        });
+
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('✓ Paket berhasil ditandai sudah diambil. Terima kasih!'),
+            backgroundColor: Color(0xFF059669),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Banner Menonjol Notifikasi Paket Kurir Tiba (PRD US-9.1 & US-9.2)
+  Widget _buildPackageArrivalBanner(AnnouncementModel pkg, String roomNumber) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2563EB).withValues(alpha: 0.35),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Icon(
+                        Icons.mark_email_unread_rounded,
+                        color: Colors.white,
+                        size: 26,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFEF08A),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  '📦 PAKET KURIR • KAMAR $roomNumber',
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF854D0E),
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ),
+                              const Spacer(),
+                              Text(
+                                pkg.timeAgo,
+                                style: const TextStyle(color: Colors.white70, fontSize: 11),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            pkg.judul,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  pkg.deskripsi,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 13,
+                    height: 1.4,
+                  ),
+                ),
+                if (pkg.hasPhoto) ...[
+                  const SizedBox(height: 12),
+                  InkWell(
+                    onTap: () => _showFullScreenImage(context, pkg.primaryPhotoUrl!),
+                    borderRadius: BorderRadius.circular(14),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: Stack(
+                        alignment: Alignment.bottomRight,
+                        children: [
+                          Image.network(
+                            pkg.primaryPhotoUrl!,
+                            height: 140,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Container(
+                              height: 90,
+                              color: Colors.white12,
+                              alignment: Alignment.center,
+                              child: const Icon(Icons.broken_image_rounded, color: Colors.white54),
+                            ),
+                          ),
+                          Container(
+                            margin: const EdgeInsets.all(8),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.black54,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.zoom_in_rounded, color: Colors.white, size: 14),
+                                SizedBox(width: 4),
+                                Text('Lihat Foto Paket', style: TextStyle(color: Colors.white, fontSize: 11)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.15),
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(22)),
+            ),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Sudah mengambil paket ini?',
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () => _markPackageAsReceived(pkg),
+                  icon: const Icon(Icons.check_circle_rounded, size: 16),
+                  label: const Text('Tandai Sudah Diambil', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF10B981),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    elevation: 0,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Banner Pengumuman Darurat / Pinned
+  Widget _buildEmergencyAnnouncementBanner(AnnouncementModel info) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFFECACA), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFDC2626).withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEE2E2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.push_pin_rounded, color: Color(0xFFDC2626), size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDC2626),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'PENTING',
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      info.timeAgo,
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  info.judul,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF991B1B)),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  info.deskripsi,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF7F1D1D), height: 1.3),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFFDC2626)),
+            onPressed: () => _showAnnouncementsBoardDialog(initialTab: 0),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Pratinjau Seksi Papan Pengumuman Kos Terkini di Halaman Utama
+  Widget _buildAnnouncementsPreviewSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.campaign_rounded, size: 20, color: Color(0xFF2563EB)),
+                SizedBox(width: 8),
+                Text(
+                  'Papan Informasi Kos',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                ),
+              ],
+            ),
+            TextButton(
+              onPressed: () => _showAnnouncementsBoardDialog(initialTab: 0),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF2563EB),
+                textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+              ),
+              child: const Text('Lihat Semua >'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ..._activeAnnouncements.take(2).map((item) {
+          return Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: item.kategoriBgColor,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(item.kategoriIcon, color: item.kategoriColor, size: 22),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: item.kategoriBgColor,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              item.kategoriLabel,
+                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: item.kategoriColor),
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(item.timeAgo, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                        ],
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        item.judul,
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        item.deskripsi,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.3),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  /// Dialog Papan Pengumuman & Riwayat Paket Penghuni
+  Future<void> _showAnnouncementsBoardDialog({int initialTab = 0}) async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => DefaultTabController(
+        length: 2,
+        initialIndex: initialTab,
+        child: Container(
+          height: MediaQuery.of(context).size.height * 0.85,
+          decoration: const BoxDecoration(
+            color: Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Column(
+            children: [
+              // Handle Bar
+              const SizedBox(height: 12),
+              Container(
+                width: 44,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFCBD5E1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    const Icon(Icons.campaign_rounded, color: Color(0xFF2563EB), size: 26),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Papan Informasi & Paket Kos',
+                            style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                          ),
+                          Text(
+                            'Pengumuman resmi dari pemilik dan riwayat paket Anda',
+                            style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // Tab Bar
+              Container(
+                color: Colors.white,
+                child: TabBar(
+                  labelColor: const Color(0xFF2563EB),
+                  unselectedLabelColor: const Color(0xFF64748B),
+                  indicatorColor: const Color(0xFF2563EB),
+                  indicatorWeight: 3,
+                  labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  tabs: [
+                    Tab(text: 'Pengumuman (${_activeAnnouncements.length})'),
+                    Tab(text: 'Riwayat Paket (${_resolvedPackages.length})'),
+                  ],
+                ),
+              ),
+
+              // Tab Views
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    // Tab 1: Pengumuman Aktif
+                    _activeAnnouncements.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(18),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFEFF6FF),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: const Icon(Icons.campaign_outlined, size: 40, color: Color(0xFF2563EB)),
+                                ),
+                                const SizedBox(height: 14),
+                                const Text('Belum Ada Pengumuman Baru', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                                const SizedBox(height: 4),
+                                const Text('Seluruh info kos dan operasional akan tampil di sini.', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+                              ],
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: _activeAnnouncements.length,
+                            itemBuilder: (context, idx) {
+                              final item = _activeAnnouncements[idx];
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(
+                                    color: item.isPinned ? const Color(0xFFFDE68A) : const Color(0xFFE2E8F0),
+                                    width: item.isPinned ? 1.5 : 1,
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(color: item.kategoriBgColor, borderRadius: BorderRadius.circular(6)),
+                                          child: Row(
+                                            children: [
+                                              Icon(item.kategoriIcon, size: 12, color: item.kategoriColor),
+                                              const SizedBox(width: 4),
+                                              Text(item.kategoriLabel, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: item.kategoriColor)),
+                                            ],
+                                          ),
+                                        ),
+                                        const Spacer(),
+                                        if (item.isPinned) const Icon(Icons.push_pin_rounded, size: 14, color: Color(0xFFD97706)),
+                                        const SizedBox(width: 4),
+                                        Text(item.timeAgo, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Text(item.judul, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                                    const SizedBox(height: 6),
+                                    Text(item.deskripsi, style: const TextStyle(fontSize: 13, color: Color(0xFF475569), height: 1.4)),
+                                    if (item.hasPhoto) ...[
+                                      const SizedBox(height: 10),
+                                      InkWell(
+                                        onTap: () => _showFullScreenImage(context, item.primaryPhotoUrl!),
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(12),
+                                          child: Image.network(item.primaryPhotoUrl!, height: 130, width: double.infinity, fit: BoxFit.cover),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+
+                    // Tab 2: Riwayat Paket yang Pernah Diterima
+                    _resolvedPackages.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(18),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFECFDF5),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: const Icon(Icons.inventory_2_outlined, size: 40, color: Color(0xFF059669)),
+                                ),
+                                const SizedBox(height: 14),
+                                const Text('Belum Ada Riwayat Paket', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                                const SizedBox(height: 4),
+                                const Text('Paket kurir yang telah Anda ambil akan tersimpan di sini.', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+                              ],
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: _resolvedPackages.length,
+                            itemBuilder: (context, idx) {
+                              final pkg = _resolvedPackages[idx];
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(color: const Color(0xFFECFDF5), borderRadius: BorderRadius.circular(6)),
+                                          child: const Row(
+                                            children: [
+                                              Icon(Icons.check_circle_rounded, size: 12, color: Color(0xFF059669)),
+                                              SizedBox(width: 4),
+                                              Text('SUDAH DIAMBIL', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF059669))),
+                                            ],
+                                          ),
+                                        ),
+                                        const Spacer(),
+                                        Text(pkg.timeAgo, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(pkg.judul, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                                    const SizedBox(height: 4),
+                                    Text(pkg.deskripsi, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.3)),
+                                    if (pkg.hasPhoto) ...[
+                                      const SizedBox(height: 10),
+                                      InkWell(
+                                        onTap: () => _showFullScreenImage(context, pkg.primaryPhotoUrl!),
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(12),
+                                          child: Image.network(pkg.primaryPhotoUrl!, height: 120, width: double.infinity, fit: BoxFit.cover),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                  ],
+                ),
               ),
             ],
           ),
